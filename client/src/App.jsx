@@ -11,7 +11,7 @@ export default function App() {
   return (
     <>
       <Toolbar tool={tool} color={color} onToolChange={setTool} onColorChange={setColor} />
-      <Board boardId={BOARD_ID} tool={tool} color={color} />
+      <Board boardId={BOARD_ID} tool={tool} color={color} onNotePlaced={() => setTool('pen')} />
     </>
   );
 }

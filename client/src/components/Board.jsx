@@ -14,8 +14,10 @@ const NOTE_MOVE_THROTTLE_MS = 50;
 const NOTE_COLOR = '#fff59d';
 // Server locks expire after 60s; renew well before that while editing.
 const LOCK_REFRESH_MS = 20_000;
+// After placing a note, ignore clicks this long so a double-click doesn't also draw.
+const NOTE_PLACED_GRACE_MS = 400;
 
-export default function Board({ boardId, tool, color }) {
+export default function Board({ boardId, tool, color, onNotePlaced }) {
   const { width, height } = useWindowSize();
   const [strokes, setStrokes] = useState([]);
   const [cursors, setCursors] = useState({});
@@ -23,6 +25,7 @@ export default function Board({ boardId, tool, color }) {
   const [editingId, setEditingId] = useState(null);
   const drawing = useRef(null);
   const editCancelled = useRef(false);
+  const notePlacedAt = useRef(0);
 
   const putNote = (note) => setNotes((ns) => ({ ...ns, [note.id]: note }));
 
@@ -82,6 +85,7 @@ export default function Board({ boardId, tool, color }) {
   const handleMouseDown = (e) => {
     // Clicks on a note are for dragging/editing it, not drawing over it.
     if (e.target.findAncestor('.note', true)) return;
+    if (Date.now() - notePlacedAt.current < NOTE_PLACED_GRACE_MS) return;
     const { x, y } = e.target.getStage().getPointerPosition();
     if (tool === 'note') {
       socket.emit('note:add', {
@@ -91,6 +95,10 @@ export default function Board({ boardId, tool, color }) {
         text: '',
         color: NOTE_COLOR,
       });
+      // One note per click: go back to drawing so a quick second click
+      // (e.g. a double-click to edit) doesn't stack another note.
+      notePlacedAt.current = Date.now();
+      onNotePlaced?.();
       return;
     }
     drawing.current = { id: crypto.randomUUID(), tool, color, points: [x, y] };
