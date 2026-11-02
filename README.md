@@ -1,5 +1,7 @@
 # Collaborative Whiteboard
 
+[![CI](https://github.com/Coa1B/collab-whiteboard/actions/workflows/ci.yml/badge.svg)](https://github.com/Coa1B/collab-whiteboard/actions/workflows/ci.yml)
+
 A real-time shared canvas where multiple users draw and collaborate at the same time and see each other's changes instantly.
 
 **Stack:** React + Konva.js · Socket.io · Node.js/Express · PostgreSQL · Redis · Docker · Jest + React Testing Library
@@ -31,6 +33,8 @@ PORT=4001 node --env-file=.env src/index.js
 Then open `http://localhost:5173/?server=http://localhost:4001` next to a window on the default server (port 4000). Drawing, cursors, notes and locks all sync between the two.
 
 ### Tests
+
+GitHub Actions runs everything below on every push and pull request, against real PostgreSQL and Redis services.
 
 ```bash
 npm test                            # unit and component tests
