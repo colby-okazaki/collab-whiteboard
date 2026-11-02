@@ -1,3 +1,5 @@
+const fs = require('fs');
+const path = require('path');
 const Redis = require('ioredis');
 const { createAdapter } = require('@socket.io/redis-adapter');
 const { createApp } = require('./app');
@@ -8,6 +10,7 @@ const { RedisBoardStore } = require('./store/redisStore');
 const PORT = process.env.PORT || 4000;
 const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN || 'http://localhost:5173';
 const { DATABASE_URL, REDIS_URL } = process.env;
+const CLIENT_DIST = path.join(__dirname, '..', '..', 'client', 'dist');
 
 // With REDIS_URL, live state and Socket.io broadcasts are shared through
 // Redis, so any number of instances can serve the same boards. Without it,
@@ -30,7 +33,13 @@ async function main() {
   }
 
   const { store, adapter } = createLiveState();
-  const { server } = createApp({ store, db, clientOrigin: CLIENT_ORIGIN, adapter });
+  const { server } = createApp({
+    store,
+    db,
+    clientOrigin: CLIENT_ORIGIN,
+    adapter,
+    staticDir: fs.existsSync(CLIENT_DIST) ? CLIENT_DIST : undefined,
+  });
   server.listen(PORT, () => {
     const storage = DATABASE_URL ? 'PostgreSQL' : 'in-memory only';
     const live = REDIS_URL ? 'Redis (multi-instance)' : 'in-memory (single instance)';

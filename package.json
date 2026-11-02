@@ -14,6 +14,8 @@
     "dev:client": "npm run dev -w client",
     "db:up": "docker compose up -d --wait",
     "db:down": "docker compose down",
+    "docker:up": "docker compose --profile app up -d --build --wait",
+    "docker:down": "docker compose --profile app down",
     "test": "npm test -w server && npm test -w client"
   },
   "devDependencies": {

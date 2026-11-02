@@ -25,5 +25,22 @@ services:
       timeout: 3s
       retries: 15
 
+  # The whole app in one container. Opt in with `npm run docker:up`
+  # (the `app` profile keeps `npm run db:up` to just the databases).
+  app:
+    profiles: ["app"]
+    build: .
+    ports:
+      - "8080:4000"
+    environment:
+      DATABASE_URL: postgres://whiteboard:whiteboard@db:5432/whiteboard
+      REDIS_URL: redis://redis:6379
+      CLIENT_ORIGIN: http://localhost:8080
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
 volumes:
   pgdata:

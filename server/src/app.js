@@ -6,10 +6,13 @@ const { Server } = require('socket.io');
 // Builds the HTTP + Socket.io server around a board store (live state) and a
 // persistence layer (durable storage). index.js picks the implementations;
 // tests use this directly to run several instances side by side.
-function createApp({ store, db, clientOrigin, adapter }) {
+function createApp({ store, db, clientOrigin, adapter, staticDir }) {
   const app = express();
   app.use(cors({ origin: clientOrigin }));
   app.get('/health', (_req, res) => res.json({ ok: true }));
+  // In production the server also serves the built client, so one process
+  // (and one container) is the whole app.
+  if (staticDir) app.use(express.static(staticDir));
 
   const server = http.createServer(app);
   const io = new Server(server, { cors: { origin: clientOrigin } });

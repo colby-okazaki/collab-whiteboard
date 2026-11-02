@@ -21,6 +21,14 @@ Open the client in two browser windows to see changes sync. Boards are saved to 
 
 Both services are optional: without `DATABASE_URL` boards are kept in memory only, and without `REDIS_URL` the server runs as a single instance with live state in memory.
 
+### Running the whole app in Docker
+
+```bash
+npm run docker:up    # builds the image and starts the app, PostgreSQL and Redis
+```
+
+Open http://localhost:8080. In this mode the server also serves the built client, so one container is the whole app. Stop it with `npm run docker:down`.
+
 ### Running several server instances
 
 With Redis configured, any number of server instances can serve the same boards:
@@ -44,7 +52,7 @@ npm run test:integration -w server  # PostgreSQL, Redis and multi-instance tests
 ## Project layout
 
 ```
-server/   Express + Socket.io server
+server/   Express + Socket.io server (also serves the built client in production)
   src/store/   live board state: in-memory or Redis, sharing one set of conflict rules
   src/db/      PostgreSQL persistence
 client/   Vite + React + react-konva frontend
