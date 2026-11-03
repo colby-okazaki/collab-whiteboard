@@ -7,7 +7,8 @@
     "dev": "node --watch --env-file-if-exists=.env src/index.js",
     "start": "node --env-file-if-exists=.env src/index.js",
     "test": "jest",
-    "test:integration": "jest tests/persistence.test.js tests/redisStore.test.js tests/multiInstance.test.js --setupFiles ./tests/loadEnv.js"
+    "test:integration": "jest tests/persistence.test.js tests/redisStore.test.js tests/multiInstance.test.js --setupFiles ./tests/loadEnv.js",
+    "bench": "node scripts/latency.js"
   },
   "dependencies": {
     "@socket.io/redis-adapter": "^8.3.0",
