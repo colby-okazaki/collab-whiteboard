@@ -9,6 +9,7 @@
 // nothing is saved.
 const { io } = require('socket.io-client');
 const { summarize } = require('./stats');
+const { cleanupBoard } = require('./cleanup');
 
 const arg = (name, fallback) => {
   const i = process.argv.indexOf(`--${name}`);
@@ -56,6 +57,7 @@ async function main() {
   await Promise.race([done, new Promise((r) => setTimeout(r, 3000))]);
   sender.disconnect();
   receiver.disconnect();
+  await cleanupBoard(board);
 
   const s = summarize(latencies);
   const fmt = (n) => `${n.toFixed(2)} ms`;

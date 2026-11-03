@@ -16,7 +16,9 @@
     "db:down": "docker compose down",
     "docker:up": "docker compose --profile app up -d --build --wait",
     "docker:down": "docker compose --profile app down",
-    "test": "npm test -w server && npm test -w client"
+    "test": "npm test -w server && npm test -w client",
+    "coverage": "npm run coverage -w server && npm run coverage -w client",
+    "bench:batching": "node scripts/batching.js"
   },
   "devDependencies": {
     "concurrently": "^9.2.5"

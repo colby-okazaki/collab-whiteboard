@@ -29,3 +29,8 @@ test('summarize reports count, extremes and percentiles', () => {
   const s = summarize(Array.from({ length: 100 }, (_, i) => i + 1));
   expect(s).toEqual({ count: 100, min: 1, p50: 50, p95: 95, p99: 99, max: 100 });
 });
+
+test('summarize handles very large samples', () => {
+  const values = Array.from({ length: 500_000 }, (_, i) => i + 1);
+  expect(summarize(values)).toMatchObject({ count: 500_000, min: 1, max: 500_000, p50: 250_000 });
+});

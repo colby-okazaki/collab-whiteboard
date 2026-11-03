@@ -47,7 +47,11 @@ GitHub Actions runs everything below on every push and pull request, against rea
 ```bash
 npm test                            # unit and component tests
 npm run test:integration -w server  # PostgreSQL, Redis and multi-instance tests (needs npm run db:up)
+npm run coverage                    # coverage report
 npm run bench -w server             # sync latency benchmark (needs a running server)
+npm run bench:load -w server        # concurrent-user load test
+npm run bench:races -w server       # conflict-resolution stress test
+npm run bench:batching              # traffic saved by batching and throttling
 ```
 
 ## Project layout
@@ -97,16 +101,64 @@ The server doesn't trust clients. Every socket payload is checked in `server/src
 - Coordinates must be finite numbers within bounds, stroke batches are capped (400 values per message), and colors, tools and text lengths are checked.
 - Only known fields are copied through, so clients can't inject extra properties such as a note's `version` or `lockedBy`.
 
-## Latency
+## Measured results
 
-`npm run bench -w server` connects two users to a running server and times how long a message takes to travel from one, through the server, to the other. Measured on a laptop with PostgreSQL and Redis running in Docker, 500 messages each:
+All numbers come from the scripts in this repo and were measured on a single laptop, with the load generator, both server instances, PostgreSQL and Redis all running on it. That makes them a fair test of the server and the Redis hop, but they exclude internet delay, so real-world latency is these numbers plus the network round trip.
 
-| Path | p50 | p95 | p99 |
+### Sync latency
+
+`npm run bench -w server` times a message from one user, through the server, to another (500 messages per run):
+
+| Path | p50 | p99 |
+|---|---|---|
+| Both users on one server | 0.9 - 1.3 ms | 1.6 - 4.5 ms |
+| Users on two different servers (via Redis) | 2.0 - 2.9 ms | 4.4 - 8.3 ms |
+
+The ranges cover two separate runs.
+
+### Concurrent users
+
+`npm run bench:load -w server` connects many users to one board and has some of them move their cursor at 20 updates a second (the rate the client sends). Users are spread across two server instances, so deliveries cross the Redis hop. Every run delivered 100% of messages.
+
+| Connected users | Moving | Deliveries per second | p50 | p95 | p99 |
+|---|---|---|---|---|---|
+| 50 | 10 | 9,555 | 4.4 ms | 12.1 ms | 17.1 ms |
+| 100 | 20 | 38,422 | 9.6 ms | 17.9 ms | 39.8 ms |
+| 200 | 20 | 77,610 | 5.5 ms | 16.2 ms | 24.7 ms |
+| 500 | 10 | 97,804 | 11.5 ms | 22.2 ms | 31.7 ms |
+| 300 | 30 | 173,988 | 12.1 ms | 42.4 ms | 184.6 ms |
+
+Up to 500 connected users, p99 stayed under 40 ms. At 300 users with 30 of them moving (174k deliveries a second), p99 rose above the ~100 ms target, which is where this setup starts to saturate.
+
+### Conflict resolution under stress
+
+`npm run bench:races -w server` has 10 users on two server instances grab the same sticky note at the same instant, 500 times (5,000 simultaneous lock attempts). Each trial checks that exactly one user gets the lock, that nobody else can commit while it is held, that the holder's commit is accepted, that a commit based on an old version is rejected as stale, and that the note ends up exactly as the holder left it. Result: 0 violations across all checks.
+
+To confirm the test can fail, it was also run against a server patched to grant every lock; that run reported violations in every trial and exited with an error.
+
+### Traffic saved by batching and throttling
+
+`npm run bench:batching` drives the client's real batching and throttling code with simulated mouse input for 4 seconds:
+
+| Input rate | Stroke point messages | Cursor messages | Cursor bytes |
 |---|---|---|---|
-| Both users on one server | 1.3 ms | 3.0 ms | 4.5 ms |
-| Users on two different servers (via Redis) | 2.9 ms | 5.8 ms | 8.3 ms |
+| 60 Hz | 66% fewer | 66% fewer | 66% less |
+| 120 Hz | 80% fewer | 82% fewer | 82% less |
 
-These runs are on localhost, so they show the cost of the server and Redis hop, not internet delay. Real-world latency is that plus the network round trip, which leaves most of the ~100ms target for the network. To measure a deployed copy, point the script at it with `--from` and `--to`.
+Payload bytes for stroke points are 29-35% lower. Byte counts cover the JSON payload only; socket framing would add to the unbatched side.
+
+### Tests and coverage
+
+`npm test` runs 111 tests (94 server, 17 client), and `npm run coverage` reports coverage:
+
+| | Statements | Lines | Functions | Branches |
+|---|---|---|---|---|
+| Server | 82% | 84% | 89% | 75% |
+| Client | 80% | 82% | 78% | 41% |
+
+The server figure includes the integration tests that run against real PostgreSQL and Redis. Client branch coverage is lower because note dragging and editing aren't covered by component tests yet.
+
+The app is about 1,200 lines of source across 18 files, plus about 800 lines of tests.
 
 ## Scaling across instances
 

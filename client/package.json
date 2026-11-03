@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "jest"
+    "test": "jest",
+    "coverage": "jest --coverage --coverageReporters=text-summary"
   },
   "dependencies": {
     "konva": "^9.3.18",

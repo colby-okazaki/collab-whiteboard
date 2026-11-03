@@ -7,13 +7,16 @@ function percentile(values, p) {
 }
 
 function summarize(values) {
+  // Sort once: spreading hundreds of thousands of values into Math.min/max
+  // overflows the call stack.
+  const sorted = [...values].sort((a, b) => a - b);
   return {
-    count: values.length,
-    min: Math.min(...values),
-    p50: percentile(values, 50),
-    p95: percentile(values, 95),
-    p99: percentile(values, 99),
-    max: Math.max(...values),
+    count: sorted.length,
+    min: sorted[0],
+    p50: percentile(sorted, 50),
+    p95: percentile(sorted, 95),
+    p99: percentile(sorted, 99),
+    max: sorted[sorted.length - 1],
   };
 }
 

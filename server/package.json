@@ -8,7 +8,10 @@
     "start": "node --env-file-if-exists=.env src/index.js",
     "test": "jest",
     "test:integration": "jest tests/persistence.test.js tests/redisStore.test.js tests/multiInstance.test.js --setupFiles ./tests/loadEnv.js",
-    "bench": "node scripts/latency.js"
+    "bench": "node --env-file-if-exists=.env scripts/latency.js",
+    "bench:load": "node --env-file-if-exists=.env scripts/load.js",
+    "bench:races": "node --env-file-if-exists=.env scripts/races.js",
+    "coverage": "jest --coverage --coverageReporters=text-summary --collectCoverageFrom='src/**/*.js' --setupFiles ./tests/loadEnv.js"
   },
   "dependencies": {
     "@socket.io/redis-adapter": "^8.3.0",
