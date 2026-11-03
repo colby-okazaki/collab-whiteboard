@@ -2,6 +2,7 @@ const express = require('express');
 const http = require('http');
 const cors = require('cors');
 const { Server } = require('socket.io');
+const validate = require('./validate');
 
 // Builds the HTTP + Socket.io server around a board store (live state) and a
 // persistence layer (durable storage). index.js picks the implementations;
@@ -42,21 +43,26 @@ function createApp({ store, db, clientOrigin, adapter, staticDir }) {
     // Strokes this socket has started but not finished, saved if it drops.
     socket.data.openStrokes = new Set();
 
-    // Store calls are async, so failures are caught here rather than
-    // crashing the process. Writes that expect an ack get an error reply.
-    const on = (event, handler) =>
+    const reply = (ack, result) => typeof ack === 'function' && ack(result);
+
+    // Payloads are validated first; malformed ones are dropped, and writes
+    // that expect an ack get a rejection instead of silence. Store calls are
+    // async, so failures are caught here rather than crashing the process,
+    // and acked writes get an error reply.
+    const on = (event, parse, handler) =>
       socket.on(event, async (payload, ack) => {
         try {
-          await handler(payload ?? {}, ack);
+          const clean = parse(payload);
+          if (clean === null) return reply(ack, { ok: false, reason: 'invalid' });
+          await handler(clean, ack);
         } catch (err) {
           console.error(`Error handling ${event}:`, err.message);
           if (typeof ack === 'function') ack({ ok: false, reason: 'error' });
         }
       });
-    const reply = (ack, result) => typeof ack === 'function' && ack(result);
     const boardOf = () => socket.data.boardId;
 
-    on('board:join', async (boardId) => {
+    on('board:join', validate.boardId, async (boardId) => {
       try {
         await ensureBoardLoaded(boardId);
       } catch (err) {
@@ -71,7 +77,7 @@ function createApp({ store, db, clientOrigin, adapter, staticDir }) {
     });
 
     // Strokes stream while being drawn: start, then batched point updates.
-    on('stroke:start', async (stroke) => {
+    on('stroke:start', validate.strokeStart, async (stroke) => {
       const boardId = boardOf();
       if (!boardId) return;
       socket.data.openStrokes.add(stroke.id);
@@ -79,7 +85,7 @@ function createApp({ store, db, clientOrigin, adapter, staticDir }) {
       socket.to(boardId).emit('stroke:start', stroke);
     });
 
-    on('stroke:points', async ({ id, points }) => {
+    on('stroke:points', validate.strokePoints, async ({ id, points }) => {
       const boardId = boardOf();
       if (!boardId || !(await store.appendPoints(boardId, id, points))) return;
       socket.to(boardId).emit('stroke:points', { id, points });
@@ -92,13 +98,13 @@ function createApp({ store, db, clientOrigin, adapter, staticDir }) {
       if (stroke) persist(db.saveStroke(boardId, stroke), `stroke ${strokeId}`);
     };
 
-    on('stroke:end', async ({ id }) => {
+    on('stroke:end', validate.strokeId, async ({ id }) => {
       const boardId = boardOf();
       if (boardId) await saveStroke(boardId, id);
     });
 
     // Cursors are ephemeral: relayed to the room, never stored.
-    on('cursor:move', ({ x, y, name, color }) => {
+    on('cursor:move', validate.cursor, ({ x, y, name, color }) => {
       const boardId = boardOf();
       if (!boardId) return;
       socket.to(boardId).emit('cursor:move', { id: socket.id, x, y, name, color });
@@ -106,7 +112,7 @@ function createApp({ store, db, clientOrigin, adapter, staticDir }) {
 
     // Sticky notes. Writes are acknowledged so the client can roll back
     // when the server rejects them; see store/rules.js for the conflict rules.
-    on('note:add', async (note, ack) => {
+    on('note:add', validate.noteAdd, async (note, ack) => {
       const boardId = boardOf();
       if (!boardId) return;
       const created = await store.addNote(boardId, note);
@@ -116,7 +122,7 @@ function createApp({ store, db, clientOrigin, adapter, staticDir }) {
     });
 
     // Also used by the client to refresh its lock while editing.
-    on('note:lock', async ({ id, name, color }, ack) => {
+    on('note:lock', validate.noteLock, async ({ id, name, color }, ack) => {
       const boardId = boardOf();
       if (!boardId) return;
       const res = await store.lockNote(boardId, id, { id: socket.id, name, color });
@@ -124,13 +130,13 @@ function createApp({ store, db, clientOrigin, adapter, staticDir }) {
       reply(ack, res);
     });
 
-    on('note:move', async ({ id, x, y }) => {
+    on('note:move', validate.noteMove, async ({ id, x, y }) => {
       const boardId = boardOf();
       if (!boardId || !(await store.canMove(boardId, id, socket.id))) return;
       socket.to(boardId).emit('note:moving', { id, x, y });
     });
 
-    on('note:commit', async ({ id, baseVersion, changes }, ack) => {
+    on('note:commit', validate.noteCommit, async ({ id, baseVersion, changes }, ack) => {
       const boardId = boardOf();
       if (!boardId) return;
       const res = await store.commitNote(boardId, id, socket.id, baseVersion, changes);
@@ -141,7 +147,7 @@ function createApp({ store, db, clientOrigin, adapter, staticDir }) {
       reply(ack, res);
     });
 
-    on('note:unlock', async ({ id }) => {
+    on('note:unlock', validate.noteUnlock, async ({ id }) => {
       const boardId = boardOf();
       if (!boardId) return;
       const note = await store.unlockNote(boardId, id, socket.id);

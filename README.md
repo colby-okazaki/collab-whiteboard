@@ -89,6 +89,14 @@ The live board store (memory or Redis) stays the source of truth, so real-time s
 
 Locks and cursors are never stored; they only make sense while users are connected.
 
+## Input validation
+
+The server doesn't trust clients. Every socket payload is checked in `server/src/validate.js` before it touches a store, and anything malformed is dropped (writes that expect a reply get `{ ok: false, reason: 'invalid' }`):
+
+- Board and object IDs must be short strings of letters, digits, `-` and `_`, which also keeps user input out of Redis key names.
+- Coordinates must be finite numbers within bounds, stroke batches are capped (400 values per message), and colors, tools and text lengths are checked.
+- Only known fields are copied through, so clients can't inject extra properties such as a note's `version` or `lockedBy`.
+
 ## Latency
 
 `npm run bench -w server` connects two users to a running server and times how long a message takes to travel from one, through the server, to the other. Measured on a laptop with PostgreSQL and Redis running in Docker, 500 messages each:
