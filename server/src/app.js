@@ -19,9 +19,19 @@ function createApp({ store, db, clientOrigin, adapter, staticDir }) {
   const io = new Server(server, { cors: { origin: clientOrigin } });
   if (adapter) io.adapter(adapter);
 
-  // Background writes must never take down the real-time path.
-  const persist = (promise, what) =>
-    promise.catch((err) => console.error(`Failed to save ${what}:`, err.message));
+  // Background writes must never take down the real-time path. They run one
+  // after another per board, so a slow save can't land after a later clear
+  // and bring deleted data back.
+  const writeQueues = new Map();
+  const persist = (boardId, write, what) => {
+    const queued = (writeQueues.get(boardId) || Promise.resolve())
+      .then(write)
+      .catch((err) => console.error(`Failed to save ${what}:`, err.message));
+    writeQueues.set(boardId, queued);
+    queued.then(() => {
+      if (writeQueues.get(boardId) === queued) writeQueues.delete(boardId);
+    });
+  };
 
   // Loads each board from the database at most once per instance, even if
   // several users join while the first load is still in flight. Across
@@ -95,7 +105,7 @@ function createApp({ store, db, clientOrigin, adapter, staticDir }) {
     const saveStroke = async (boardId, strokeId) => {
       socket.data.openStrokes.delete(strokeId);
       const stroke = await store.findStroke(boardId, strokeId);
-      if (stroke) persist(db.saveStroke(boardId, stroke), `stroke ${strokeId}`);
+      if (stroke) persist(boardId, () => db.saveStroke(boardId, stroke), `stroke ${strokeId}`);
     };
 
     on('stroke:end', validate.strokeId, async ({ id }) => {
@@ -116,7 +126,7 @@ function createApp({ store, db, clientOrigin, adapter, staticDir }) {
       const boardId = boardOf();
       if (!boardId) return;
       const created = await store.addNote(boardId, note);
-      persist(db.saveNote(boardId, created), `note ${created.id}`);
+      persist(boardId, () => db.saveNote(boardId, created), `note ${created.id}`);
       io.to(boardId).emit('note:upsert', created);
       reply(ack, { ok: true, note: created });
     });
@@ -140,7 +150,7 @@ function createApp({ store, db, clientOrigin, adapter, staticDir }) {
       const boardId = boardOf();
       if (!boardId) return;
       const res = await store.commitNote(boardId, id, socket.id, baseVersion, changes);
-      if (res.ok) persist(db.saveNote(boardId, res.note), `note ${id}`);
+      if (res.ok) persist(boardId, () => db.saveNote(boardId, res.note), `note ${id}`);
       // On success or a stale rejection the stored note changed (new version
       // or released lock), so everyone gets the authoritative copy.
       if (res.ok || res.reason === 'stale') io.to(boardId).emit('note:upsert', res.note);
@@ -152,6 +162,17 @@ function createApp({ store, db, clientOrigin, adapter, staticDir }) {
       if (!boardId) return;
       const note = await store.unlockNote(boardId, id, socket.id);
       if (note) io.to(boardId).emit('note:upsert', note);
+    });
+
+    // Wipes the board for everyone. Anything still in flight for the old
+    // content (late points, commits) finds nothing to attach to and is dropped.
+    on('board:clear', validate.none, async (_payload, ack) => {
+      const boardId = boardOf();
+      if (!boardId) return reply(ack, { ok: false, reason: 'not_joined' });
+      await store.clearBoard(boardId);
+      persist(boardId, () => db.clearBoard(boardId), `clear of board ${boardId}`);
+      io.to(boardId).emit('board:cleared');
+      reply(ack, { ok: true });
     });
 
     socket.on('disconnect', async () => {

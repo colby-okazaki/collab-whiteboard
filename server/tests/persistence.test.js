@@ -15,7 +15,11 @@ describeDb('PostgreSQL persistence', () => {
     await db.init();
   });
 
-  afterAll(() => db.close());
+  // Leave the database as the tests found it.
+  afterAll(async () => {
+    await db.clearBoard(board);
+    await db.close();
+  });
 
   test('an unknown board loads as empty', async () => {
     expect(await db.loadBoard(`${board}-missing`)).toEqual({ strokes: [], notes: {} });
@@ -52,5 +56,19 @@ describeDb('PostgreSQL persistence', () => {
     await db.saveNote(board, { ...note, text: 'late v2', version: 2 });
     const { notes } = await db.loadBoard(board);
     expect(notes[note.id]).toMatchObject({ text: 'v3', version: 3 });
+  });
+
+  test('clearing a board removes its strokes and notes but not other boards', async () => {
+    const other = `${board}-other`;
+    await db.saveStroke(other, { id: `${other}-s`, tool: 'pen', color: '#000', points: [1, 1] });
+    await db.saveNote(other, { ...note, id: `${other}-n` });
+
+    await db.clearBoard(board);
+
+    expect(await db.loadBoard(board)).toEqual({ strokes: [], notes: {} });
+    const kept = await db.loadBoard(other);
+    expect(kept.strokes).toHaveLength(1);
+    expect(Object.keys(kept.notes)).toHaveLength(1);
+    await db.clearBoard(other);
   });
 });

@@ -69,7 +69,11 @@ function noteCommit(p) {
   return { id: p.id, baseVersion: p.baseVersion, changes: p.changes };
 }
 
+// Events that carry no data of their own (the board comes from the socket).
+const none = () => ({});
+
 module.exports = {
+  none,
   boardId,
   strokeStart,
   strokePoints,

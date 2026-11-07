@@ -48,6 +48,15 @@ function createPgPersistence(connectionString) {
       );
     },
 
+    // One statement, so a board is never left half-cleared.
+    async clearBoard(boardId) {
+      await pool.query(
+        `WITH removed_strokes AS (DELETE FROM strokes WHERE board_id = $1)
+         DELETE FROM notes WHERE board_id = $1`,
+        [boardId]
+      );
+    },
+
     async close() {
       await pool.end();
     },
@@ -62,6 +71,7 @@ const memoryPersistence = {
   },
   async saveStroke() {},
   async saveNote() {},
+  async clearBoard() {},
   async close() {},
 };
 

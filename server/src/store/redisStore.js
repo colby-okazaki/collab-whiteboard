@@ -213,6 +213,13 @@ class RedisBoardStore {
     return released.map((json) => JSON.parse(json));
   }
 
+  // One DEL, so the board is emptied atomically. The loaded marker stays,
+  // so the cleared board is not re-seeded from PostgreSQL.
+  async clearBoard(boardId) {
+    const k = keys(boardId);
+    await this.redis.del(k.order, k.strokes, k.notes);
+  }
+
   async close() {
     await this.redis.quit();
   }

@@ -55,6 +55,14 @@ export default function Board({ boardId, tool, color, onNotePlaced }) {
       setStrokes(snap.strokes);
       setNotes(snap.notes);
     });
+    socket.on('board:cleared', () => {
+      // Drop anything half-finished locally too, so it can't reappear.
+      drawing.current = null;
+      pointBatcher.cancel();
+      setStrokes([]);
+      setNotes({});
+      setEditingId(null);
+    });
     socket.on('note:upsert', putNote);
     socket.on('note:moving', ({ id, x, y }) =>
       setNotes((ns) => (ns[id] ? { ...ns, [id]: { ...ns[id], x, y } } : ns))
@@ -72,6 +80,7 @@ export default function Board({ boardId, tool, color, onNotePlaced }) {
       pointBatcher.cancel();
       sendNoteMove.cancel();
       socket.off('board:snapshot');
+      socket.off('board:cleared');
       socket.off('note:upsert');
       socket.off('note:moving');
       socket.off('stroke:start');

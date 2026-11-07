@@ -140,4 +140,18 @@ describeRedis('multiple server instances', () => {
     expect((await released).version).toBe(1);
     expect((await call(bob.socket, 'note:lock', { id: 'n1' })).ok).toBe(true);
   });
+
+  test('clearing on one instance clears the board for users on the other', async () => {
+    const alice = await join(a, 'clearing');
+    const bob = await join(b, 'clearing');
+    alice.socket.emit('stroke:start', { id: 's1', tool: 'pen', color: '#000', points: [0, 0] });
+    await call(alice.socket, 'note:add', { id: 'n1', x: 0, y: 0, color: '#fff59d' });
+
+    const cleared = next(bob.socket, 'board:cleared');
+    expect(await call(alice.socket, 'board:clear')).toEqual({ ok: true });
+    await cleared;
+
+    const { snap } = await join(b, 'clearing');
+    expect(snap).toEqual({ strokes: [], notes: {} });
+  });
 });

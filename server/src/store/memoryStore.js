@@ -104,6 +104,11 @@ class MemoryBoardStore {
     return released;
   }
 
+  // Wipes every stroke and note, including any locks.
+  async clearBoard(boardId) {
+    this.boards.set(boardId, { strokes: [], notes: {} });
+  }
+
   async close() {}
 }
 

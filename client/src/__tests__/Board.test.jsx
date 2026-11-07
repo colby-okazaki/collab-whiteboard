@@ -128,3 +128,21 @@ test('the note tool places one note centered on the click, then ignores a quick 
   expect(emitted('note:add')).toHaveLength(1);
   expect(emitted('stroke:start')).toHaveLength(0);
 });
+
+test('a cleared board removes every stroke and note, and drops a half-drawn stroke', () => {
+  render(<Board boardId="room" tool="pen" color="#111111" />);
+  receive('board:snapshot', {
+    strokes: [{ id: 's1', tool: 'pen', color: '#000000', points: [1, 2, 3, 4] }],
+    notes: { n1: note() },
+  });
+  mouse('mouseDown', 10, 20); // a stroke is in progress when the clear arrives
+  expect(screen.getAllByTestId('line')).toHaveLength(2);
+
+  receive('board:cleared');
+  expect(screen.queryByTestId('line')).toBeNull();
+  expect(screen.queryAllByTestId('text')).toHaveLength(0);
+
+  // Moving on afterwards must not bring the half-drawn stroke back.
+  mouse('mouseMove', 30, 40);
+  expect(screen.queryByTestId('line')).toBeNull();
+});

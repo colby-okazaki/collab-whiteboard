@@ -160,6 +160,52 @@ function runStoreContract(makeStore) {
     });
   });
 
+  describe('clearBoard', () => {
+    const fill = async () => {
+      await open();
+      await store.addStroke('a', { id: 's1', points: [0, 0] });
+      await store.addNote('a', { id: 'n1', x: 0, y: 0, text: 'hi', color: '#fff59d' });
+      await store.lockNote('a', 'n1', alice);
+    };
+
+    test('removes every stroke and note, locks included', async () => {
+      await fill();
+      await store.clearBoard('a');
+      expect(await store.snapshot('a')).toEqual({ strokes: [], notes: {} });
+    });
+
+    test('leaves other boards alone', async () => {
+      await fill();
+      await store.addStroke('b', { id: 's2', points: [1, 1] });
+      await store.clearBoard('a');
+      expect((await store.snapshot('b')).strokes.map((s) => s.id)).toEqual(['s2']);
+    });
+
+    test('keeps the board loaded, so it is not re-seeded from saved data', async () => {
+      await fill();
+      await store.hydrate('a', { strokes: [{ id: 'old', points: [9, 9] }], notes: {} });
+      await store.clearBoard('a');
+      expect(await store.isLoaded('a')).toBe(true);
+      expect(await store.hydrate('a', { strokes: [{ id: 'old', points: [9, 9] }], notes: {} })).toBe(false);
+      expect((await store.snapshot('a')).strokes).toEqual([]);
+    });
+
+    test('late updates for cleared content are rejected', async () => {
+      await fill();
+      await store.clearBoard('a');
+      expect(await store.appendPoints('a', 's1', [5, 5])).toBe(false);
+      expect(await store.commitNote('a', 'n1', 'alice', 1, { x: 5 })).toEqual({ ok: false, reason: 'not_found' });
+      expect(await store.canMove('a', 'n1', 'alice')).toBe(false);
+    });
+
+    test('the board can be used again afterwards', async () => {
+      await fill();
+      await store.clearBoard('a');
+      await store.addNote('a', { id: 'n1', x: 3, y: 4, color: '#fff59d' });
+      expect((await store.snapshot('a')).notes.n1).toMatchObject({ x: 3, y: 4, version: 1, lockedBy: null });
+    });
+  });
+
   describe('hydrate', () => {
     const saved = {
       strokes: [{ id: 's1', tool: 'pen', color: '#000', points: [0, 0, 1, 1] }],

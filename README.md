@@ -72,6 +72,7 @@ client/   Vite + React + react-konva frontend
 - [x] Live cursors (throttled to 50ms)
 - [x] Conflict resolution for concurrent edits/moves (locks + versioning)
 - [x] PostgreSQL persistence for board state
+- [x] Clear board, with a confirmation, wiping the board for every user
 - [x] Stretch: Redis for multi-instance scaling
 
 ## Conflict resolution
@@ -92,6 +93,10 @@ The live board store (memory or Redis) stays the source of truth, so real-time s
 - **Boards** are loaded from the database the first time someone opens them after a restart. Concurrent joins share one load.
 
 Locks and cursors are never stored; they only make sense while users are connected.
+
+### Clearing a board
+
+The **clear board** button asks for confirmation, then wipes the board for every connected user: the live state (memory or Redis) is emptied, the board's rows are deleted from PostgreSQL in a single statement, and every client is told to reset, including dropping any half-drawn stroke or open note editor. Database writes for a board run in order, so a slow save from just before a clear can't land afterwards and bring deleted content back after a restart. Late messages about cleared content (extra stroke points, note commits) find nothing to attach to and are dropped.
 
 ## Input validation
 
@@ -149,12 +154,12 @@ Payload bytes for stroke points are 29-35% lower. Byte counts cover the JSON pay
 
 ### Tests and coverage
 
-`npm test` runs 111 tests (94 server, 17 client), and `npm run coverage` reports coverage:
+`npm test` runs 131 tests (110 server, 21 client), and `npm run coverage` reports coverage:
 
 | | Statements | Lines | Functions | Branches |
 |---|---|---|---|---|
-| Server | 82% | 84% | 89% | 75% |
-| Client | 80% | 82% | 78% | 41% |
+| Server | 84% | 84% | 90% | 77% |
+| Client | 81% | 83% | 78% | 43% |
 
 The server figure includes the integration tests that run against real PostgreSQL and Redis. Client branch coverage is lower because note dragging and editing aren't covered by component tests yet.
 
