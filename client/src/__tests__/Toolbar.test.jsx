@@ -16,3 +16,10 @@ test('clear board button calls onClear', () => {
   fireEvent.click(screen.getByRole('button', { name: 'clear board' }));
   expect(onClear).toHaveBeenCalledTimes(1);
 });
+
+test('changing the color reports the new color', () => {
+  const onColorChange = jest.fn();
+  render(<Toolbar tool="pen" color="#000000" onToolChange={() => {}} onColorChange={onColorChange} onClear={() => {}} />);
+  fireEvent.change(screen.getByLabelText('Pen color'), { target: { value: '#ff0000' } });
+  expect(onColorChange).toHaveBeenCalledWith('#ff0000');
+});

@@ -154,14 +154,14 @@ Payload bytes for stroke points are 29-35% lower. Byte counts cover the JSON pay
 
 ### Tests and coverage
 
-`npm test` runs 131 tests (110 server, 21 client), and `npm run coverage` reports coverage:
+`npm test` runs 148 tests (110 server, 38 client), and `npm run coverage` reports coverage:
 
 | | Statements | Lines | Functions | Branches |
 |---|---|---|---|---|
 | Server | 84% | 84% | 90% | 77% |
-| Client | 81% | 83% | 78% | 43% |
+| Client | 98% | 99% | 100% | 73% |
 
-The server figure includes the integration tests that run against real PostgreSQL and Redis. Client branch coverage is lower because note dragging and editing aren't covered by component tests yet.
+The server figure includes the integration tests that run against real PostgreSQL and Redis. Client tests cover drawing, streamed updates from other users, note dragging and editing (including lock denials, rolled-back commits and lock renewal), and clearing the board. The one client file with no coverage is `socket.js`, which reads Vite's `import.meta` and can't be loaded under Jest. The component tests replace the Konva canvas with plain elements, so they check behavior rather than pixels.
 
 The app is about 1,200 lines of source across 18 files, plus about 800 lines of tests.
 
