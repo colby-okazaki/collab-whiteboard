@@ -160,6 +160,44 @@ function runStoreContract(makeStore) {
     });
   });
 
+  describe('removeStroke', () => {
+    test('removes just that stroke and says so', async () => {
+      await open();
+      await store.addStroke('a', { id: 's1', points: [0, 0] });
+      await store.addStroke('a', { id: 's2', points: [1, 1] });
+      await store.addStroke('a', { id: 's3', points: [2, 2] });
+      expect(await store.removeStroke('a', 's2')).toBe(true);
+      expect((await store.snapshot('a')).strokes.map((s) => s.id)).toEqual(['s1', 's3']);
+      expect(await store.findStroke('a', 's2')).toBeNull();
+    });
+
+    test('returns false for a stroke that is not there, or on another board', async () => {
+      await open();
+      await store.addStroke('a', { id: 's1', points: [0, 0] });
+      expect(await store.removeStroke('a', 'missing')).toBe(false);
+      expect(await store.removeStroke('b', 's1')).toBe(false);
+      expect((await store.snapshot('a')).strokes).toHaveLength(1);
+    });
+
+    test('late points for a removed stroke are rejected', async () => {
+      await open();
+      await store.addStroke('a', { id: 's1', points: [0, 0] });
+      await store.removeStroke('a', 's1');
+      expect(await store.appendPoints('a', 's1', [5, 5])).toBe(false);
+    });
+
+    test('a stroke can be added again after removal, at the top', async () => {
+      await open();
+      await store.addStroke('a', { id: 's1', points: [0, 0] });
+      await store.addStroke('a', { id: 's2', points: [1, 1] });
+      await store.removeStroke('a', 's1');
+      await store.addStroke('a', { id: 's1', points: [0, 0, 9, 9] });
+      const { strokes } = await store.snapshot('a');
+      expect(strokes.map((s) => s.id)).toEqual(['s2', 's1']);
+      expect(strokes[1].points).toEqual([0, 0, 9, 9]);
+    });
+  });
+
   describe('clearBoard', () => {
     const fill = async () => {
       await open();

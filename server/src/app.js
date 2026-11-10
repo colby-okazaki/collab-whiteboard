@@ -53,6 +53,8 @@ function createApp({ store, db, clientOrigin, adapter, staticDir }) {
   io.on('connection', (socket) => {
     // Strokes this socket has started but not finished, saved if it drops.
     socket.data.openStrokes = new Set();
+    // Strokes this socket drew, the only ones it may undo.
+    socket.data.ownStrokes = new Set();
 
     const reply = (ack, result) => typeof ack === 'function' && ack(result);
 
@@ -92,6 +94,7 @@ function createApp({ store, db, clientOrigin, adapter, staticDir }) {
       const boardId = boardOf();
       if (!boardId) return;
       socket.data.openStrokes.add(stroke.id);
+      socket.data.ownStrokes.add(stroke.id);
       await store.addStroke(boardId, stroke);
       socket.to(boardId).emit('stroke:start', stroke);
     });
@@ -112,6 +115,26 @@ function createApp({ store, db, clientOrigin, adapter, staticDir }) {
     on('stroke:end', validate.strokeId, async ({ id }) => {
       const boardId = boardOf();
       if (boardId) await saveStroke(boardId, id);
+    });
+
+    // Undo removes a stroke for everyone; redo puts the whole stroke back.
+    on('stroke:undo', validate.strokeId, async ({ id }) => {
+      const boardId = boardOf();
+      if (!boardId || !socket.data.ownStrokes.has(id)) return;
+      socket.data.ownStrokes.delete(id);
+      socket.data.openStrokes.delete(id);
+      if (!(await store.removeStroke(boardId, id))) return;
+      persist(boardId, () => db.deleteStroke(boardId, id), `removal of stroke ${id}`);
+      io.to(boardId).emit('stroke:removed', id);
+    });
+
+    on('stroke:restore', validate.strokeRestore, async (stroke) => {
+      const boardId = boardOf();
+      if (!boardId || (await store.findStroke(boardId, stroke.id))) return;
+      socket.data.ownStrokes.add(stroke.id);
+      await store.addStroke(boardId, stroke);
+      persist(boardId, () => db.saveStroke(boardId, stroke), `stroke ${stroke.id}`);
+      socket.to(boardId).emit('stroke:start', stroke);
     });
 
     // Cursors are ephemeral: relayed to the room, never stored.

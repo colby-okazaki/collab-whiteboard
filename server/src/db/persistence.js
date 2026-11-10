@@ -34,6 +34,10 @@ function createPgPersistence(connectionString) {
       );
     },
 
+    async deleteStroke(boardId, strokeId) {
+      await pool.query('DELETE FROM strokes WHERE board_id = $1 AND id = $2', [boardId, strokeId]);
+    },
+
     // Writes are fire-and-forget, so two saves for the same note can land out
     // of order. The version check keeps an older write from replacing a newer one.
     async saveNote(boardId, { id, x, y, text, color, version }) {
@@ -71,6 +75,7 @@ const memoryPersistence = {
   },
   async saveStroke() {},
   async saveNote() {},
+  async deleteStroke() {},
   async clearBoard() {},
   async close() {},
 };

@@ -48,6 +48,31 @@ describe('strokeStart', () => {
   });
 });
 
+describe('strokeRestore', () => {
+  const good = { id: 's1', tool: 'pen', color: '#222222', points: [1, 2] };
+
+  test('accepts a whole stroke longer than one batch, up to its own limit', () => {
+    const long = new Array(validate.MAX_POINTS_PER_STROKE).fill(3);
+    expect(validate.strokeRestore({ ...good, points: long })).toEqual({ ...good, points: long });
+    expect(validate.strokeRestore({ ...good, points: new Array(validate.MAX_POINTS_PER_STROKE + 2).fill(3) })).toBeNull();
+  });
+
+  test.each([
+    ['unknown tool', { tool: 'laser' }],
+    ['bad color', { color: 'red' }],
+    ['bad id', { id: 'a b' }],
+    ['no points', { points: [] }],
+    ['odd number of coordinates', { points: [1, 2, 3] }],
+    ['non-finite point', { points: [1, Infinity] }],
+  ])('rejects %s', (_label, override) => {
+    expect(validate.strokeRestore({ ...good, ...override })).toBeNull();
+  });
+
+  test('keeps only the known fields', () => {
+    expect(validate.strokeRestore({ ...good, extra: 'x' })).toEqual(good);
+  });
+});
+
 describe('strokePoints', () => {
   test('accepts a batch within the size limit', () => {
     const points = new Array(validate.MAX_POINTS_PER_MESSAGE).fill(5);

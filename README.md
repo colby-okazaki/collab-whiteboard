@@ -75,6 +75,7 @@ client/   Vite + React + react-konva frontend
 - [x] Conflict resolution for concurrent edits/moves (locks + versioning)
 - [x] PostgreSQL persistence for board state
 - [x] Clear board, with a confirmation, wiping the board for every user
+- [x] Undo and redo of your own strokes
 - [x] Stretch: Redis for multi-instance scaling
 
 ## Conflict resolution
@@ -95,6 +96,10 @@ The live board store (memory or Redis) stays the source of truth, so real-time s
 - **Boards** are loaded from the database the first time someone opens them after a restart. Concurrent joins share one load.
 
 Locks and cursors are never stored; they only make sense while users are connected.
+
+### Undo and redo
+
+Cmd/Ctrl+Z undoes your last stroke, Shift+Cmd/Ctrl+Z (or Ctrl+Y) redoes it, and the toolbar has buttons for both. It steps back through your last 50 strokes, and only your own: the server remembers which socket drew each stroke and ignores an undo for anyone else's. Undoing removes the stroke for every user and deletes it from PostgreSQL, so it stays gone after a restart. Redo sends the whole stroke back in one message (allowed up to 10,000 points, more than a normal batch) and it returns on top of the board. Drawing something new clears the redo history, as does clearing the board. While typing in a note, the browser keeps its own text undo.
 
 ### Clearing a board
 
@@ -156,16 +161,16 @@ Payload bytes for stroke points are 29-35% lower. Byte counts cover the JSON pay
 
 ### Tests and coverage
 
-`npm test` runs 149 tests (111 server, 38 client), and `npm run coverage` reports coverage:
+`npm test` runs 192 tests (135 server, 57 client), and `npm run coverage` reports coverage:
 
 | | Statements | Lines | Functions | Branches |
 |---|---|---|---|---|
-| Server | 80% | 80% | 87% | 77% |
-| Client | 98% | 99% | 100% | 73% |
+| Server | 82% | 83% | 89% | 80% |
+| Client | 98% | 99% | 99% | 80% |
 
-The server figure includes the integration tests that run against real PostgreSQL and Redis. The uncovered server code is mostly `index.js`, the startup and signal-handling entry point, which is checked by CI starting the real container instead. Client tests cover drawing, streamed updates from other users, note dragging and editing (including lock denials, rolled-back commits and lock renewal), and clearing the board. The one client file with no coverage is `socket.js`, which reads Vite's `import.meta` and can't be loaded under Jest. The component tests replace the Konva canvas with plain elements, so they check behavior rather than pixels.
+The server figure includes the integration tests that run against real PostgreSQL and Redis. The uncovered server code is mostly `index.js`, the startup and signal-handling entry point, which is checked by CI starting the real container instead. Client tests cover drawing, streamed updates from other users, note dragging and editing (including lock denials, rolled-back commits and lock renewal), clearing the board, and undo and redo. The one client file with no coverage is `socket.js`, which reads Vite's `import.meta` and can't be loaded under Jest. The component tests replace the Konva canvas with plain elements, so they check behavior rather than pixels.
 
-The app is about 1,200 lines of source across 18 files, plus about 800 lines of tests.
+The app is about 1,500 lines of source across 18 files, plus about 1,650 lines of tests.
 
 ## Scaling across instances
 

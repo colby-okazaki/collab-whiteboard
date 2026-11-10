@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import Toolbar from './components/Toolbar';
 import Board from './components/Board';
 import { socket } from './socket';
@@ -8,6 +8,8 @@ const BOARD_ID = 'default';
 export default function App() {
   const [tool, setTool] = useState('pen');
   const [color, setColor] = useState('#222222');
+  const [history, setHistory] = useState({ canUndo: false, canRedo: false });
+  const board = useRef(null);
 
   // Clearing wipes the board for every connected user, so ask first.
   const handleClear = () => {
@@ -24,8 +26,19 @@ export default function App() {
         onToolChange={setTool}
         onColorChange={setColor}
         onClear={handleClear}
+        onUndo={() => board.current?.undo()}
+        onRedo={() => board.current?.redo()}
+        canUndo={history.canUndo}
+        canRedo={history.canRedo}
       />
-      <Board boardId={BOARD_ID} tool={tool} color={color} onNotePlaced={() => setTool('pen')} />
+      <Board
+        ref={board}
+        boardId={BOARD_ID}
+        tool={tool}
+        color={color}
+        onNotePlaced={() => setTool('pen')}
+        onHistoryChange={setHistory}
+      />
     </>
   );
 }

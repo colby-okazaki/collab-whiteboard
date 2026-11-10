@@ -173,6 +173,12 @@ class RedisBoardStore {
     return stroke;
   }
 
+  async removeStroke(boardId, strokeId) {
+    const k = keys(boardId);
+    const [[, removed]] = await this.redis.multi().hdel(k.strokes, strokeId).lrem(k.order, 0, strokeId).exec();
+    return removed === 1;
+  }
+
   async appendPoints(boardId, strokeId, points) {
     return (await this.redis.appendPoints(keys(boardId).strokes, strokeId, JSON.stringify(points))) === 1;
   }

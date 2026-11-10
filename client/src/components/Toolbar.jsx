@@ -1,6 +1,16 @@
 const TOOLS = ['pen', 'eraser', 'note'];
 
-export default function Toolbar({ tool, color, onToolChange, onColorChange, onClear }) {
+export default function Toolbar({
+  tool,
+  color,
+  onToolChange,
+  onColorChange,
+  onClear,
+  onUndo,
+  onRedo,
+  canUndo = false,
+  canRedo = false,
+}) {
   return (
     <div className="toolbar" role="toolbar" aria-label="Drawing tools">
       {TOOLS.map((t) => (
@@ -14,6 +24,12 @@ export default function Toolbar({ tool, color, onToolChange, onColorChange, onCl
         value={color}
         onChange={(e) => onColorChange(e.target.value)}
       />
+      <button onClick={onUndo} disabled={!canUndo} title="Undo (Cmd/Ctrl+Z)">
+        undo
+      </button>
+      <button onClick={onRedo} disabled={!canRedo} title="Redo (Shift+Cmd/Ctrl+Z)">
+        redo
+      </button>
       <button className="clear" onClick={onClear}>
         clear board
       </button>

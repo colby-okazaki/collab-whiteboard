@@ -7,15 +7,23 @@ jest.mock('../socket', () => ({ socket: { emit: jest.fn() } }));
 
 // Konva needs a real canvas, so stand in a Board that just reports the
 // active tool and lets the test place a note.
-jest.mock('../components/Board', () => ({
-  __esModule: true,
-  default: ({ tool, onNotePlaced }) => (
-    <>
-      <span data-testid="tool">{tool}</span>
-      <button onClick={onNotePlaced}>place note</button>
-    </>
-  ),
-}));
+const mockBoardActions = { undo: jest.fn(), redo: jest.fn() };
+jest.mock('../components/Board', () => {
+  const { forwardRef, useImperativeHandle } = require('react');
+  return {
+    __esModule: true,
+    default: forwardRef(({ tool, onNotePlaced, onHistoryChange }, ref) => {
+      useImperativeHandle(ref, () => mockBoardActions);
+      return (
+        <>
+          <span data-testid="tool">{tool}</span>
+          <button onClick={onNotePlaced}>place note</button>
+          <button onClick={() => onHistoryChange({ canUndo: true, canRedo: false })}>draw something</button>
+        </>
+      );
+    }),
+  };
+});
 
 test('switches back to the pen after a note is placed', () => {
   render(<App />);
@@ -44,5 +52,19 @@ describe('clear board', () => {
     render(<App />);
     fireEvent.click(screen.getByRole('button', { name: 'clear board' }));
     expect(socket.emit).not.toHaveBeenCalled();
+  });
+});
+
+describe('undo and redo', () => {
+  test('the buttons follow what the board reports and call its undo and redo', () => {
+    render(<App />);
+    expect(screen.getByRole('button', { name: 'undo' })).toBeDisabled();
+
+    fireEvent.click(screen.getByText('draw something'));
+    expect(screen.getByRole('button', { name: 'undo' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'redo' })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'undo' }));
+    expect(mockBoardActions.undo).toHaveBeenCalledTimes(1);
   });
 });

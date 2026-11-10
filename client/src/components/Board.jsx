@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { Stage, Layer, Line } from 'react-konva';
 import { socket } from '../socket';
 import { me } from '../identity';
@@ -16,8 +16,10 @@ const NOTE_COLOR = '#fff59d';
 const LOCK_REFRESH_MS = 20_000;
 // After placing a note, ignore clicks this long so a double-click doesn't also draw.
 const NOTE_PLACED_GRACE_MS = 400;
+// How many of your own strokes undo can step back through.
+const MAX_HISTORY = 50;
 
-export default function Board({ boardId, tool, color, onNotePlaced }) {
+const Board = forwardRef(function Board({ boardId, tool, color, onNotePlaced, onHistoryChange }, ref) {
   const { width, height } = useWindowSize();
   const [strokes, setStrokes] = useState([]);
   const [cursors, setCursors] = useState({});
@@ -26,6 +28,14 @@ export default function Board({ boardId, tool, color, onNotePlaced }) {
   const drawing = useRef(null);
   const editCancelled = useRef(false);
   const notePlacedAt = useRef(0);
+  // Your own finished strokes, newest last, for undo and redo.
+  const undoStack = useRef([]);
+  const redoStack = useRef([]);
+  const strokesRef = useRef(strokes);
+  strokesRef.current = strokes;
+
+  const reportHistory = () =>
+    onHistoryChange?.({ canUndo: undoStack.current.length > 0, canRedo: redoStack.current.length > 0 });
 
   const putNote = (note) => setNotes((ns) => ({ ...ns, [note.id]: note }));
 
@@ -62,7 +72,11 @@ export default function Board({ boardId, tool, color, onNotePlaced }) {
       setStrokes([]);
       setNotes({});
       setEditingId(null);
+      undoStack.current = [];
+      redoStack.current = [];
+      reportHistory();
     });
+    socket.on('stroke:removed', (id) => setStrokes((s) => s.filter((st) => st.id !== id)));
     socket.on('note:upsert', putNote);
     socket.on('note:moving', ({ id, x, y }) =>
       setNotes((ns) => (ns[id] ? { ...ns, [id]: { ...ns[id], x, y } } : ns))
@@ -81,6 +95,7 @@ export default function Board({ boardId, tool, color, onNotePlaced }) {
       sendNoteMove.cancel();
       socket.off('board:snapshot');
       socket.off('board:cleared');
+      socket.off('stroke:removed');
       socket.off('note:upsert');
       socket.off('note:moving');
       socket.off('stroke:start');
@@ -129,8 +144,55 @@ export default function Board({ boardId, tool, color, onNotePlaced }) {
     if (!drawing.current) return;
     pointBatcher.flush();
     socket.emit('stroke:end', { id: drawing.current.id });
+    undoStack.current = [...undoStack.current, drawing.current.id].slice(-MAX_HISTORY);
+    redoStack.current = [];
+    reportHistory();
     drawing.current = null;
   };
+
+  // Undo takes back your latest stroke that is still on the board (someone
+  // may have cleared it meanwhile); redo sends the same stroke back whole.
+  const undo = () => {
+    while (undoStack.current.length) {
+      const id = undoStack.current[undoStack.current.length - 1];
+      undoStack.current = undoStack.current.slice(0, -1);
+      const stroke = strokesRef.current.find((st) => st.id === id);
+      if (!stroke) continue;
+      socket.emit('stroke:undo', { id });
+      setStrokes((s) => s.filter((st) => st.id !== id));
+      redoStack.current = [...redoStack.current, stroke];
+      break;
+    }
+    reportHistory();
+  };
+
+  const redo = () => {
+    const stroke = redoStack.current[redoStack.current.length - 1];
+    if (stroke) {
+      redoStack.current = redoStack.current.slice(0, -1);
+      socket.emit('stroke:restore', stroke);
+      setStrokes((s) => [...s, stroke]);
+      undoStack.current = [...undoStack.current, stroke.id].slice(-MAX_HISTORY);
+    }
+    reportHistory();
+  };
+
+  useImperativeHandle(ref, () => ({ undo, redo }));
+
+  // Cmd/Ctrl+Z undoes, Shift+Cmd/Ctrl+Z or Ctrl+Y redoes. Typing in a note
+  // keeps the browser's own text undo.
+  useEffect(() => {
+    const onKeyDown = (e) => {
+      if (!(e.metaKey || e.ctrlKey) || e.target.closest?.('textarea, input')) return;
+      const key = e.key.toLowerCase();
+      if (key === 'z' && !e.shiftKey) undo();
+      else if ((key === 'z' && e.shiftKey) || key === 'y') redo();
+      else return;
+      e.preventDefault();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  });
 
   // Keep the lock alive for as long as the editor is open.
   useEffect(() => {
@@ -252,4 +314,6 @@ export default function Board({ boardId, tool, color, onNotePlaced }) {
       )}
     </>
   );
-}
+});
+
+export default Board;

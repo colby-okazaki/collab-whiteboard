@@ -198,6 +198,137 @@ describe('clearing the board', () => {
   });
 });
 
+describe('undo and redo', () => {
+  const { io: connect } = require('socket.io-client');
+  let running;
+  const clients = [];
+  const deleted = [];
+  afterEach(async () => {
+    clients.splice(0).forEach((c) => c.disconnect());
+    deleted.length = 0;
+    await new Promise((resolve) => running.io.close(resolve));
+  });
+
+  async function open() {
+    running = await start({
+      db: {
+        init: async () => {},
+        loadBoard: async () => null,
+        saveStroke: async () => {},
+        saveNote: async () => {},
+        deleteStroke: async (_board, id) => {
+          deleted.push(id);
+        },
+        clearBoard: async () => {},
+        close: async () => {},
+      },
+    });
+  }
+  async function join(boardId) {
+    const socket = connect(running.url, { transports: ['websocket'] });
+    clients.push(socket);
+    const snapshot = await new Promise((resolve) => {
+      socket.once('board:snapshot', resolve);
+      socket.emit('board:join', boardId);
+    });
+    return Object.assign(socket, { snapshot });
+  }
+  const next = (socket, event) => new Promise((resolve) => socket.once(event, resolve));
+  const settle = () => new Promise((r) => setTimeout(r, 100));
+  const draw = (socket, id, points = [0, 0, 5, 5]) => {
+    socket.emit('stroke:start', { id, tool: 'pen', color: '#000000', points });
+    socket.emit('stroke:end', { id });
+  };
+  const strokeIds = async (boardId) => (await join(boardId)).snapshot.strokes.map((s) => s.id);
+
+  test('undoing your own stroke removes it for everyone, and from the database', async () => {
+    await open();
+    const alice = await join('undo-1');
+    const bob = await join('undo-1');
+    draw(alice, 's1');
+    await next(bob, 'stroke:start');
+
+    const removedForBob = next(bob, 'stroke:removed');
+    const removedForAlice = next(alice, 'stroke:removed');
+    alice.emit('stroke:undo', { id: 's1' });
+    expect(await removedForBob).toBe('s1');
+    expect(await removedForAlice).toBe('s1');
+    await settle();
+    expect(deleted).toEqual(['s1']);
+    expect(await strokeIds('undo-1')).toEqual([]);
+  });
+
+  test("cannot undo someone else's stroke", async () => {
+    await open();
+    const alice = await join('undo-2');
+    const bob = await join('undo-2');
+    draw(alice, 's1');
+    await next(bob, 'stroke:start');
+
+    bob.emit('stroke:undo', { id: 's1' });
+    await settle();
+    expect(deleted).toEqual([]);
+    expect(await strokeIds('undo-2')).toEqual(['s1']);
+  });
+
+  test('undoing a stroke that is already gone does nothing', async () => {
+    await open();
+    const alice = await join('undo-3');
+    draw(alice, 's1');
+    await settle();
+    alice.emit('stroke:undo', { id: 's1' });
+    await settle();
+    alice.emit('stroke:undo', { id: 's1' });
+    await settle();
+    expect(deleted).toEqual(['s1']);
+  });
+
+  test('redo puts the whole stroke back for others, even past the batch limit', async () => {
+    await open();
+    const alice = await join('undo-4');
+    const bob = await join('undo-4');
+    const points = Array.from({ length: 1000 }, (_, i) => i);
+    draw(alice, 's1', points.slice(0, 10));
+    await next(bob, 'stroke:start');
+    alice.emit('stroke:undo', { id: 's1' });
+    await next(bob, 'stroke:removed');
+
+    const restored = next(bob, 'stroke:start');
+    alice.emit('stroke:restore', { id: 's1', tool: 'pen', color: '#000000', points });
+    expect((await restored).points).toHaveLength(1000);
+    await settle();
+    const [only] = (await join('undo-4')).snapshot.strokes;
+    expect(only).toMatchObject({ id: 's1' });
+    expect(only.points).toHaveLength(1000);
+  });
+
+  test('redo cannot duplicate a stroke that is already on the board', async () => {
+    await open();
+    const alice = await join('undo-5');
+    draw(alice, 's1');
+    await settle();
+    alice.emit('stroke:restore', { id: 's1', tool: 'pen', color: '#000000', points: [9, 9] });
+    await settle();
+    const { strokes } = (await join('undo-5')).snapshot;
+    expect(strokes).toHaveLength(1);
+    expect(strokes[0].points).toEqual([0, 0, 5, 5]);
+  });
+
+  test('a restored stroke can be undone again', async () => {
+    await open();
+    const alice = await join('undo-6');
+    draw(alice, 's1');
+    await settle();
+    alice.emit('stroke:undo', { id: 's1' });
+    await next(alice, 'stroke:removed');
+    alice.emit('stroke:restore', { id: 's1', tool: 'pen', color: '#000000', points: [0, 0, 5, 5] });
+    await settle();
+    alice.emit('stroke:undo', { id: 's1' });
+    await next(alice, 'stroke:removed');
+    expect(await strokeIds('undo-6')).toEqual([]);
+  });
+});
+
 describe('shutting down', () => {
   const { io: connect } = require('socket.io-client');
 

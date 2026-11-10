@@ -39,6 +39,21 @@ describeDb('PostgreSQL persistence', () => {
     expect(strokes[0].points).toEqual([0, 0, 1, 1, 2, 2]);
   });
 
+  test('a deleted stroke is gone after loading, and others stay', async () => {
+    await db.saveStroke(board, { id: `${board}-s3`, tool: 'pen', color: '#000', points: [7, 7] });
+    await db.deleteStroke(board, `${board}-s3`);
+    await db.deleteStroke(board, `${board}-never-saved`);
+    const { strokes } = await db.loadBoard(board);
+    expect(strokes.map((s) => s.id)).toEqual([`${board}-s1`, `${board}-s2`]);
+  });
+
+  test('deleting a stroke only affects its own board', async () => {
+    const other = `${board}-other`;
+    await db.saveStroke(other, { id: `${board}-s2`, tool: 'pen', color: '#000', points: [1, 1] });
+    await db.deleteStroke(other, `${board}-s2`);
+    expect((await db.loadBoard(board)).strokes.map((s) => s.id)).toContain(`${board}-s2`);
+  });
+
   test('notes round-trip unlocked', async () => {
     await db.saveNote(board, note);
     const { notes } = await db.loadBoard(board);

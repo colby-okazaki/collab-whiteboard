@@ -23,3 +23,25 @@ test('changing the color reports the new color', () => {
   fireEvent.change(screen.getByLabelText('Pen color'), { target: { value: '#ff0000' } });
   expect(onColorChange).toHaveBeenCalledWith('#ff0000');
 });
+
+describe('undo and redo buttons', () => {
+  const setup = (props) => {
+    const handlers = { onUndo: jest.fn(), onRedo: jest.fn() };
+    render(<Toolbar tool="pen" color="#000000" onToolChange={() => {}} onColorChange={() => {}} onClear={() => {}} {...handlers} {...props} />);
+    return handlers;
+  };
+
+  test('are disabled until there is something to undo or redo', () => {
+    setup();
+    expect(screen.getByRole('button', { name: 'undo' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'redo' })).toBeDisabled();
+  });
+
+  test('call their handlers when available', () => {
+    const { onUndo, onRedo } = setup({ canUndo: true, canRedo: true });
+    fireEvent.click(screen.getByRole('button', { name: 'undo' }));
+    fireEvent.click(screen.getByRole('button', { name: 'redo' }));
+    expect(onUndo).toHaveBeenCalledTimes(1);
+    expect(onRedo).toHaveBeenCalledTimes(1);
+  });
+});

@@ -43,6 +43,14 @@ class MemoryBoardStore {
     return stroke;
   }
 
+  // Returns false if the stroke is not on the board.
+  async removeStroke(boardId, strokeId) {
+    const board = this.board(boardId);
+    const before = board.strokes.length;
+    board.strokes = board.strokes.filter((s) => s.id !== strokeId);
+    return board.strokes.length < before;
+  }
+
   // Appends points to an in-progress stroke. Returns false for unknown strokes.
   async appendPoints(boardId, strokeId, points) {
     const { strokes } = this.board(boardId);

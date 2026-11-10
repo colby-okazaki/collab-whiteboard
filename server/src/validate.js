@@ -5,6 +5,7 @@
 const MAX_ID_LENGTH = 64;
 const MAX_NAME_LENGTH = 30;
 const MAX_POINTS_PER_MESSAGE = 400; // 200 x/y pairs, about 8s of drawing at 40ms batches
+const MAX_POINTS_PER_STROKE = 20_000; // a whole stroke being restored by redo
 const MAX_COORD = 100_000;
 
 const ID_PATTERN = /^[A-Za-z0-9_-]+$/;
@@ -31,6 +32,13 @@ function boardId(v) {
 function strokeStart(p) {
   if (!isObject(p) || !isId(p.id) || !TOOLS.has(p.tool) || !isColor(p.color)) return null;
   if (!isPointList(p.points, MAX_POINTS_PER_MESSAGE)) return null;
+  return { id: p.id, tool: p.tool, color: p.color, points: p.points };
+}
+
+// A finished stroke sent back in one piece (redo), so it may be longer than a batch.
+function strokeRestore(p) {
+  if (!isObject(p) || !isId(p.id) || !TOOLS.has(p.tool) || !isColor(p.color)) return null;
+  if (!isPointList(p.points, MAX_POINTS_PER_STROKE)) return null;
   return { id: p.id, tool: p.tool, color: p.color, points: p.points };
 }
 
@@ -76,6 +84,7 @@ module.exports = {
   none,
   boardId,
   strokeStart,
+  strokeRestore,
   strokePoints,
   strokeId,
   cursor,
@@ -85,4 +94,5 @@ module.exports = {
   noteCommit,
   noteUnlock: strokeId,
   MAX_POINTS_PER_MESSAGE,
+  MAX_POINTS_PER_STROKE,
 };
