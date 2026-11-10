@@ -29,6 +29,8 @@ npm run docker:up    # builds the image and starts the app, PostgreSQL and Redis
 
 Open http://localhost:8080. In this mode the server also serves the built client, so one container is the whole app. Stop it with `npm run docker:down`.
 
+On SIGTERM (what hosts send when restarting or redeploying) the server stops accepting connections, saves any half-drawn strokes, waits for queued database writes, then exits, so a deploy doesn't lose what was just drawn. CI builds the image, starts the container, checks it serves the client and `/health`, and checks it exits cleanly when stopped.
+
 ### Running several server instances
 
 With Redis configured, any number of server instances can serve the same boards:
@@ -154,14 +156,14 @@ Payload bytes for stroke points are 29-35% lower. Byte counts cover the JSON pay
 
 ### Tests and coverage
 
-`npm test` runs 148 tests (110 server, 38 client), and `npm run coverage` reports coverage:
+`npm test` runs 149 tests (111 server, 38 client), and `npm run coverage` reports coverage:
 
 | | Statements | Lines | Functions | Branches |
 |---|---|---|---|---|
-| Server | 84% | 84% | 90% | 77% |
+| Server | 80% | 80% | 87% | 77% |
 | Client | 98% | 99% | 100% | 73% |
 
-The server figure includes the integration tests that run against real PostgreSQL and Redis. Client tests cover drawing, streamed updates from other users, note dragging and editing (including lock denials, rolled-back commits and lock renewal), and clearing the board. The one client file with no coverage is `socket.js`, which reads Vite's `import.meta` and can't be loaded under Jest. The component tests replace the Konva canvas with plain elements, so they check behavior rather than pixels.
+The server figure includes the integration tests that run against real PostgreSQL and Redis. The uncovered server code is mostly `index.js`, the startup and signal-handling entry point, which is checked by CI starting the real container instead. Client tests cover drawing, streamed updates from other users, note dragging and editing (including lock denials, rolled-back commits and lock renewal), and clearing the board. The one client file with no coverage is `socket.js`, which reads Vite's `import.meta` and can't be loaded under Jest. The component tests replace the Konva canvas with plain elements, so they check behavior rather than pixels.
 
 The app is about 1,200 lines of source across 18 files, plus about 800 lines of tests.
 

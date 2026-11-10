@@ -6,14 +6,14 @@ const { MemoryBoardStore } = require('../src/store/memoryStore');
 const { createPersistence } = require('../src/db/persistence');
 
 async function start(options = {}) {
-  const { server, io } = createApp({
+  const { server, io, shutdown } = createApp({
     store: new MemoryBoardStore(),
     db: createPersistence(undefined),
     clientOrigin: '*',
     ...options,
   });
   await new Promise((resolve) => server.listen(0, resolve));
-  return { io, url: `http://localhost:${server.address().port}` };
+  return { io, shutdown, url: `http://localhost:${server.address().port}` };
 }
 
 describe('createApp', () => {
@@ -195,5 +195,43 @@ describe('clearing the board', () => {
     // Without ordering, the clear would run first and the slow save would
     // then put the deleted note back.
     expect(calls).toEqual(['save note', 'clear']);
+  });
+});
+
+describe('shutting down', () => {
+  const { io: connect } = require('socket.io-client');
+
+  test('saves half-drawn strokes and queued writes before it finishes', async () => {
+    const saved = [];
+    const slow = () => new Promise((resolve) => setTimeout(resolve, 60));
+    const running = await start({
+      db: {
+        init: async () => {},
+        loadBoard: async () => null,
+        saveStroke: async (_board, stroke) => {
+          await slow();
+          saved.push(stroke.id);
+        },
+        saveNote: async (_board, note) => {
+          await slow();
+          saved.push(note.id);
+        },
+        clearBoard: async () => {},
+        close: async () => {},
+      },
+    });
+    const socket = connect(running.url, { transports: ['websocket'] });
+    await new Promise((resolve) => {
+      socket.once('board:snapshot', resolve);
+      socket.emit('board:join', 'shutdown-1');
+    });
+    socket.emit('stroke:start', { id: 's1', tool: 'pen', color: '#000000', points: [0, 0] });
+    await new Promise((resolve) => socket.emit('note:add', { id: 'n1', x: 1, y: 2, color: '#fff59d' }, resolve));
+    await new Promise((r) => setTimeout(r, 20));
+
+    // The stroke was never ended and the note save is still in flight.
+    await running.shutdown();
+    expect(saved.sort()).toEqual(['n1', 's1']);
+    socket.disconnect();
   });
 });

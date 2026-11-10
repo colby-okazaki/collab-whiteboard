@@ -33,7 +33,7 @@ async function main() {
   }
 
   const { store, adapter } = createLiveState();
-  const { server } = createApp({
+  const { server, shutdown } = createApp({
     store,
     db,
     clientOrigin: CLIENT_ORIGIN,
@@ -45,6 +45,27 @@ async function main() {
     const live = REDIS_URL ? 'Redis (multi-instance)' : 'in-memory (single instance)';
     console.log(`Server listening on :${PORT} (storage: ${storage}, live state: ${live})`);
   });
+
+  // Hosts stop containers with SIGTERM; finish pending saves before exiting.
+  let stopping = false;
+  const stop = async (signal) => {
+    if (stopping) return;
+    stopping = true;
+    console.log(`${signal} received, saving and shutting down`);
+    const force = setTimeout(() => process.exit(1), 10_000);
+    force.unref();
+    try {
+      await shutdown();
+      await store.close();
+      await db.close();
+      process.exit(0);
+    } catch (err) {
+      console.error('Error during shutdown:', err.message);
+      process.exit(1);
+    }
+  };
+  process.on('SIGTERM', () => stop('SIGTERM'));
+  process.on('SIGINT', () => stop('SIGINT'));
 }
 
 main();

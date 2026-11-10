@@ -54,3 +54,28 @@ jobs:
 
       - name: Build client
         run: npm run build -w client
+
+  # Builds the production image and checks that the container really starts,
+  # serves the client, and exits cleanly when stopped.
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build image
+        run: docker build -t whiteboard .
+
+      - name: Start container and check it responds
+        run: |
+          docker run -d --name whiteboard -p 4000:4000 whiteboard
+          for i in $(seq 1 20); do
+            curl -sf http://localhost:4000/health && break
+            sleep 1
+          done
+          curl -sf http://localhost:4000/health
+          curl -sf http://localhost:4000/ | grep -q '<div id="root">'
+
+      - name: Stops cleanly on SIGTERM
+        run: |
+          docker stop whiteboard
+          test "$(docker inspect whiteboard --format '{{.State.ExitCode}}')" = "0"

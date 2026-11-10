@@ -36,6 +36,7 @@ function createApp({ store, db, clientOrigin, adapter, staticDir }) {
   // Loads each board from the database at most once per instance, even if
   // several users join while the first load is still in flight. Across
   // instances, the store's hydrate only lets the first load through.
+  const cleanups = new Set();
   const loading = new Map();
   async function ensureBoardLoaded(boardId) {
     if (await store.isLoaded(boardId)) return;
@@ -175,22 +176,35 @@ function createApp({ store, db, clientOrigin, adapter, staticDir }) {
       reply(ack, { ok: true });
     });
 
-    socket.on('disconnect', async () => {
+    socket.on('disconnect', () => {
       const boardId = boardOf();
       if (!boardId) return;
       socket.to(boardId).emit('cursor:leave', socket.id);
-      try {
-        await Promise.all([...socket.data.openStrokes].map((id) => saveStroke(boardId, id)));
-        for (const note of await store.releaseLocks(boardId, socket.id)) {
-          socket.to(boardId).emit('note:upsert', note);
+      const cleanup = (async () => {
+        try {
+          await Promise.all([...socket.data.openStrokes].map((id) => saveStroke(boardId, id)));
+          for (const note of await store.releaseLocks(boardId, socket.id)) {
+            socket.to(boardId).emit('note:upsert', note);
+          }
+        } catch (err) {
+          console.error('Error cleaning up after disconnect:', err.message);
         }
-      } catch (err) {
-        console.error('Error cleaning up after disconnect:', err.message);
-      }
+      })();
+      cleanups.add(cleanup);
+      cleanup.finally(() => cleanups.delete(cleanup));
     });
   });
 
-  return { server, io };
+  // Stops accepting connections, lets every client's disconnect cleanup run
+  // (saving half-drawn strokes), then waits for queued database writes, so a
+  // deploy or restart doesn't lose what was just drawn.
+  async function shutdown() {
+    await new Promise((resolve) => io.close(resolve));
+    await Promise.all([...cleanups]);
+    while (writeQueues.size) await Promise.all([...writeQueues.values()]);
+  }
+
+  return { server, io, shutdown };
 }
 
 module.exports = { createApp };
