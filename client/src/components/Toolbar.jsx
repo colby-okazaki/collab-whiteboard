@@ -6,6 +6,10 @@ export default function Toolbar({
   onToolChange,
   onColorChange,
   onClear,
+  boardId,
+  copied = false,
+  onShare,
+  onNewBoard,
   onUndo,
   onRedo,
   canUndo = false,
@@ -30,6 +34,11 @@ export default function Toolbar({
       <button onClick={onRedo} disabled={!canRedo} title="Redo (Shift+Cmd/Ctrl+Z)">
         redo
       </button>
+      <span className="board-name" title="Board name">
+        {boardId}
+      </span>
+      <button onClick={onShare}>{copied ? 'link copied' : 'share'}</button>
+      <button onClick={onNewBoard}>new board</button>
       <button className="clear" onClick={onClear}>
         clear board
       </button>

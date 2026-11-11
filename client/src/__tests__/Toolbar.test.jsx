@@ -45,3 +45,29 @@ describe('undo and redo buttons', () => {
     expect(onRedo).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('sharing and boards', () => {
+  const setup = (props) => {
+    const handlers = { onShare: jest.fn(), onNewBoard: jest.fn() };
+    render(<Toolbar tool="pen" color="#000000" onToolChange={() => {}} onColorChange={() => {}} onClear={() => {}} boardId="team-sync" {...handlers} {...props} />);
+    return handlers;
+  };
+
+  test('shows the board name', () => {
+    setup();
+    expect(screen.getByText('team-sync')).toBeInTheDocument();
+  });
+
+  test('share and new board call their handlers', () => {
+    const { onShare, onNewBoard } = setup();
+    fireEvent.click(screen.getByRole('button', { name: 'share' }));
+    fireEvent.click(screen.getByRole('button', { name: 'new board' }));
+    expect(onShare).toHaveBeenCalledTimes(1);
+    expect(onNewBoard).toHaveBeenCalledTimes(1);
+  });
+
+  test('says when the link was copied', () => {
+    setup({ copied: true });
+    expect(screen.getByRole('button', { name: 'link copied' })).toBeInTheDocument();
+  });
+});

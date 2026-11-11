@@ -17,7 +17,7 @@ npm run db:up   # start PostgreSQL and Redis in Docker
 npm run dev     # server on :4000 and client on :5173 together
 ```
 
-Open the client in two browser windows to see changes sync. Boards are saved to PostgreSQL and survive server restarts.
+Open the client in two browser windows to see changes sync, or click **share** to copy a link to the board you're on. Boards are saved to PostgreSQL and survive server restarts.
 
 Both services are optional: without `DATABASE_URL` boards are kept in memory only, and without `REDIS_URL` the server runs as a single instance with live state in memory.
 
@@ -76,6 +76,7 @@ client/   Vite + React + react-konva frontend
 - [x] PostgreSQL persistence for board state
 - [x] Clear board, with a confirmation, wiping the board for every user
 - [x] Undo and redo of your own strokes
+- [x] Multiple boards: shareable links (`?board=name`) and a new board button
 - [x] Stretch: Redis for multi-instance scaling
 
 ## Conflict resolution
@@ -96,6 +97,10 @@ The live board store (memory or Redis) stays the source of truth, so real-time s
 - **Boards** are loaded from the database the first time someone opens them after a restart. Concurrent joins share one load.
 
 Locks and cursors are never stored; they only make sense while users are connected.
+
+### Boards and sharing
+
+The board comes from the address: `?board=team-sync` opens that board, and no parameter opens `default`. **new board** switches to a fresh random board and updates the address, so the back button returns to the previous one, and **share** copies the link (or shows it to copy by hand if the browser blocks clipboard access). Names follow the server's rules (letters, digits, `-` and `_`, up to 64 characters); anything else falls back to the default board. Each board has its own strokes, notes, locks and history, and anyone with the link can edit it, since there are no accounts yet.
 
 ### Undo and redo
 
@@ -161,16 +166,16 @@ Payload bytes for stroke points are 29-35% lower. Byte counts cover the JSON pay
 
 ### Tests and coverage
 
-`npm test` runs 192 tests (135 server, 57 client), and `npm run coverage` reports coverage:
+`npm test` runs 213 tests (135 server, 78 client), and `npm run coverage` reports coverage:
 
 | | Statements | Lines | Functions | Branches |
 |---|---|---|---|---|
 | Server | 82% | 83% | 89% | 80% |
-| Client | 98% | 99% | 99% | 80% |
+| Client | 98% | 99% | 99% | 81% |
 
-The server figure includes the integration tests that run against real PostgreSQL and Redis. The uncovered server code is mostly `index.js`, the startup and signal-handling entry point, which is checked by CI starting the real container instead. Client tests cover drawing, streamed updates from other users, note dragging and editing (including lock denials, rolled-back commits and lock renewal), clearing the board, and undo and redo. The one client file with no coverage is `socket.js`, which reads Vite's `import.meta` and can't be loaded under Jest. The component tests replace the Konva canvas with plain elements, so they check behavior rather than pixels.
+The server figure includes the integration tests that run against real PostgreSQL and Redis. The uncovered server code is mostly `index.js`, the startup and signal-handling entry point, which is checked by CI starting the real container instead. Client tests cover drawing, streamed updates from other users, note dragging and editing (including lock denials, rolled-back commits and lock renewal), clearing the board, undo and redo, and switching and sharing boards. The one client file with no coverage is `socket.js`, which reads Vite's `import.meta` and can't be loaded under Jest. The component tests replace the Konva canvas with plain elements, so they check behavior rather than pixels.
 
-The app is about 1,500 lines of source across 18 files, plus about 1,650 lines of tests.
+The app is about 1,500 lines of source across 19 files, plus about 2,000 lines of tests.
 
 ## Scaling across instances
 

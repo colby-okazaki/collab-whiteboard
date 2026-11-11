@@ -12,3 +12,5 @@ body { margin: 0; font-family: system-ui, sans-serif; overflow: hidden; backgrou
   background: #fff59d; font: 14px system-ui, sans-serif; resize: none; outline: none;
 }
 .toolbar button.clear { margin-left: 8px; color: #b91c1c; border-color: #fca5a5; }
+.toolbar .board-name { margin-left: 8px; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; color: #666; }
+.toolbar button:disabled { opacity: 0.4; }
