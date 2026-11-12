@@ -10,6 +10,7 @@ export default function Toolbar({
   copied = false,
   onShare,
   onNewBoard,
+  onExport,
   onUndo,
   onRedo,
   canUndo = false,
@@ -39,6 +40,9 @@ export default function Toolbar({
       </span>
       <button onClick={onShare}>{copied ? 'link copied' : 'share'}</button>
       <button onClick={onNewBoard}>new board</button>
+      <button onClick={onExport} title="Download the board as an image">
+        export png
+      </button>
       <button className="clear" onClick={onClear}>
         clear board
       </button>

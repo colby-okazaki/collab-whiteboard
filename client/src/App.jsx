@@ -57,6 +57,7 @@ export default function App() {
         copied={copied}
         onShare={handleShare}
         onNewBoard={handleNewBoard}
+        onExport={() => board.current?.exportPng()}
         onClear={handleClear}
         onUndo={() => board.current?.undo()}
         onRedo={() => board.current?.redo()}

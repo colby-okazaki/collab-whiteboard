@@ -5,34 +5,7 @@ import { socket } from '../socket';
 
 // Konva needs a real canvas, so react-konva is replaced with plain elements.
 // Stage turns DOM mouse events into the shape Board expects from Konva.
-jest.mock('react-konva', () => {
-  const stageEvent = (e) => ({
-    target: { findAncestor: () => null, getStage: () => ({ getPointerPosition: () => ({ x: e.clientX, y: e.clientY }) }) },
-  });
-  const el = (name) => ({ children, ...props }) => (
-    <div data-testid={name} data-points={props.points?.join(',')} data-x={props.x} data-y={props.y} data-text={props.text}>
-      {children}
-    </div>
-  );
-  return {
-    Stage: ({ children, onMouseDown, onMouseMove, onMouseUp }) => (
-      <div
-        data-testid="stage"
-        onMouseDown={(e) => onMouseDown(stageEvent(e))}
-        onMouseMove={(e) => onMouseMove(stageEvent(e))}
-        onMouseUp={onMouseUp}
-      >
-        {children}
-      </div>
-    ),
-    Layer: el('layer'),
-    Line: el('line'),
-    Group: el('group'),
-    Rect: el('rect'),
-    Circle: el('circle'),
-    Text: el('text'),
-  };
-});
+jest.mock('react-konva', () => require('../test-utils/konvaMock').createKonvaMock());
 
 // A fake socket that lets tests push server events into the component.
 jest.mock('../socket', () => {

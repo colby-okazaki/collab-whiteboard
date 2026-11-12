@@ -5,8 +5,8 @@ import { socket } from '../socket';
 // Konva needs a real canvas, so the canvas pieces are replaced with plain
 // elements. The sticky note stand-in exposes the handlers Board gives it.
 jest.mock('react-konva', () => {
-  const box = ({ children }) => <div>{children}</div>;
-  return { Stage: box, Layer: box, Line: () => null };
+  const box = require('react').forwardRef(({ children }, _ref) => <div>{children}</div>);
+  return { Stage: box, Layer: box, Line: () => null, Rect: () => null };
 });
 jest.mock('../components/Cursors', () => ({ __esModule: true, default: () => null }));
 

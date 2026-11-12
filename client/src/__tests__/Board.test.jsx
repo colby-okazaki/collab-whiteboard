@@ -1,37 +1,12 @@
+import { createRef } from 'react';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import Board from '../components/Board';
 import { socket } from '../socket';
+import { stage as konvaStage, layer as konvaLayer } from '../test-utils/konvaMock';
 
 // Konva needs a real canvas, so react-konva is replaced with plain elements.
 // Stage turns DOM mouse events into the shape Board expects from Konva.
-jest.mock('react-konva', () => {
-  const stageEvent = (e) => ({
-    target: { findAncestor: () => null, getStage: () => ({ getPointerPosition: () => ({ x: e.clientX, y: e.clientY }) }) },
-  });
-  const el = (name) => ({ children, ...props }) => (
-    <div data-testid={name} data-points={props.points?.join(',')} data-x={props.x} data-y={props.y} data-text={props.text}>
-      {children}
-    </div>
-  );
-  return {
-    Stage: ({ children, onMouseDown, onMouseMove, onMouseUp }) => (
-      <div
-        data-testid="stage"
-        onMouseDown={(e) => onMouseDown(stageEvent(e))}
-        onMouseMove={(e) => onMouseMove(stageEvent(e))}
-        onMouseUp={onMouseUp}
-      >
-        {children}
-      </div>
-    ),
-    Layer: el('layer'),
-    Line: el('line'),
-    Group: el('group'),
-    Rect: el('rect'),
-    Circle: el('circle'),
-    Text: el('text'),
-  };
-});
+jest.mock('react-konva', () => require('../test-utils/konvaMock').createKonvaMock());
 
 // A fake socket that lets tests push server events into the component.
 jest.mock('../socket', () => {
@@ -145,4 +120,65 @@ test('a cleared board removes every stroke and note, and drops a half-drawn stro
   // Moving on afterwards must not bring the half-drawn stroke back.
   mouse('mouseMove', 30, 40);
   expect(screen.queryByTestId('line')).toBeNull();
+});
+
+describe('touch', () => {
+  const touch = (type, x, y) => fireEvent[type](stage(), { touches: [{ clientX: x, clientY: y }] });
+
+  test('a finger draws a stroke the same way the mouse does', () => {
+    render(<Board boardId="room" tool="pen" color="#abcdef" />);
+    touch('touchStart', 10, 20);
+    touch('touchMove', 30, 40);
+    fireEvent.touchEnd(stage());
+    expect(emitted('stroke:start')).toEqual([{ id: 'new-id', tool: 'pen', color: '#abcdef', points: [10, 20] }]);
+    expect(emitted('stroke:points')).toEqual([{ id: 'new-id', points: [30, 40] }]);
+    expect(emitted('stroke:end')).toEqual([{ id: 'new-id' }]);
+    expect(screen.getByTestId('line')).toHaveAttribute('data-points', '10,20,30,40');
+  });
+
+  test('cancels the touch, so the browser does not repeat it as a mouse click and draw twice', () => {
+    // React listens for touch events passively, so check the call itself.
+    const cancel = jest.spyOn(Event.prototype, 'preventDefault');
+    render(<Board boardId="room" tool="pen" color="#111111" />);
+    touch('touchStart', 10, 20);
+    touch('touchMove', 30, 40);
+    fireEvent.touchEnd(stage());
+    expect(cancel).toHaveBeenCalledTimes(3);
+    cancel.mockRestore();
+  });
+
+  test('a tap with the note tool places a note', () => {
+    render(<Board boardId="room" tool="note" color="#111111" />);
+    touch('touchStart', 500, 300);
+    expect(emitted('note:add')).toEqual([expect.objectContaining({ x: 420, y: 240 })]);
+  });
+});
+
+describe('exporting', () => {
+  test('saves the board as an image named after it, without cursors in it', () => {
+    const ref = createRef();
+    const link = document.createElement('a');
+    link.click = jest.fn();
+    const create = jest.spyOn(document, 'createElement');
+    render(<Board ref={ref} boardId="team-sync" tool="pen" color="#111111" />);
+    create.mockImplementation((tag) => (tag === 'a' ? link : Document.prototype.createElement.call(document, tag)));
+    konvaStage.toDataURL.mockClear();
+    konvaLayer.hide.mockClear();
+    konvaLayer.show.mockClear();
+
+    act(() => ref.current.exportPng());
+    create.mockRestore();
+
+    expect(konvaLayer.hide).toHaveBeenCalledTimes(1);
+    expect(konvaStage.toDataURL).toHaveBeenCalledTimes(1);
+    expect(konvaLayer.show).toHaveBeenCalledTimes(1);
+    expect(link.download).toBe('whiteboard-team-sync.png');
+    expect(link.click).toHaveBeenCalledTimes(1);
+  });
+
+  test('draws a paper-coloured background behind everything, so the image is not transparent', () => {
+    render(<Board boardId="room" tool="pen" color="#111111" />);
+    const layers = screen.getAllByTestId('layer');
+    expect(layers[0]).toContainElement(screen.getByTestId('rect'));
+  });
 });

@@ -77,6 +77,8 @@ client/   Vite + React + react-konva frontend
 - [x] Clear board, with a confirmation, wiping the board for every user
 - [x] Undo and redo of your own strokes
 - [x] Multiple boards: shareable links (`?board=name`) and a new board button
+- [x] Export the board as a PNG
+- [x] Touch drawing on phones and tablets
 - [x] Stretch: Redis for multi-instance scaling
 
 ## Conflict resolution
@@ -101,6 +103,10 @@ Locks and cursors are never stored; they only make sense while users are connect
 ### Boards and sharing
 
 The board comes from the address: `?board=team-sync` opens that board, and no parameter opens `default`. **new board** switches to a fresh random board and updates the address, so the back button returns to the previous one, and **share** copies the link (or shows it to copy by hand if the browser blocks clipboard access). Names follow the server's rules (letters, digits, `-` and `_`, up to 64 characters); anything else falls back to the default board. Each board has its own strokes, notes, locks and history, and anyone with the link can edit it, since there are no accounts yet.
+
+### Export and touch
+
+**export png** downloads the board as `whiteboard-<board>.png` at twice the screen resolution, so it stays sharp when zoomed. The image has the paper-coloured background and contains the strokes and notes; other people's cursors are hidden for the capture. It saves what is in the window, since there is no zoom or panning yet. Drawing also works with a finger: touch input is handled like the mouse, and the browser's own scrolling and zooming are switched off over the board. The toolbar wraps on narrow screens. Touch has been tried with simulated touch events, not a real phone.
 
 ### Undo and redo
 
@@ -166,16 +172,16 @@ Payload bytes for stroke points are 29-35% lower. Byte counts cover the JSON pay
 
 ### Tests and coverage
 
-`npm test` runs 213 tests (135 server, 78 client), and `npm run coverage` reports coverage:
+`npm test` runs 225 tests (135 server, 90 client), and `npm run coverage` reports coverage:
 
 | | Statements | Lines | Functions | Branches |
 |---|---|---|---|---|
 | Server | 82% | 83% | 89% | 80% |
 | Client | 98% | 99% | 99% | 81% |
 
-The server figure includes the integration tests that run against real PostgreSQL and Redis. The uncovered server code is mostly `index.js`, the startup and signal-handling entry point, which is checked by CI starting the real container instead. Client tests cover drawing, streamed updates from other users, note dragging and editing (including lock denials, rolled-back commits and lock renewal), clearing the board, undo and redo, and switching and sharing boards. The one client file with no coverage is `socket.js`, which reads Vite's `import.meta` and can't be loaded under Jest. The component tests replace the Konva canvas with plain elements, so they check behavior rather than pixels.
+The server figure includes the integration tests that run against real PostgreSQL and Redis. The uncovered server code is mostly `index.js`, the startup and signal-handling entry point, which is checked by CI starting the real container instead. Client tests cover drawing, streamed updates from other users, note dragging and editing (including lock denials, rolled-back commits and lock renewal), clearing the board, undo and redo, and switching and sharing boards, touch drawing, and exporting an image. The one client file with no coverage is `socket.js`, which reads Vite's `import.meta` and can't be loaded under Jest. The component tests replace the Konva canvas with plain elements, so they check behavior rather than pixels.
 
-The app is about 1,500 lines of source across 19 files, plus about 2,000 lines of tests.
+The app is about 1,600 lines of source across 20 files, plus about 2,150 lines of tests.
 
 ## Scaling across instances
 

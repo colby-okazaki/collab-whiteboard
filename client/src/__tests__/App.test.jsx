@@ -7,7 +7,7 @@ jest.mock('../socket', () => ({ socket: { emit: jest.fn() } }));
 
 // Konva needs a real canvas, so stand in a Board that just reports the
 // active tool and lets the test place a note.
-const mockBoardActions = { undo: jest.fn(), redo: jest.fn() };
+const mockBoardActions = { undo: jest.fn(), redo: jest.fn(), exportPng: jest.fn() };
 jest.mock('../components/Board', () => {
   const { forwardRef, useImperativeHandle } = require('react');
   return {
@@ -140,4 +140,10 @@ describe('boards in the address', () => {
       prompt.mockRestore();
     });
   });
+});
+
+test('export png asks the board to save itself as an image', () => {
+  render(<App />);
+  fireEvent.click(screen.getByRole('button', { name: 'export png' }));
+  expect(mockBoardActions.exportPng).toHaveBeenCalledTimes(1);
 });

@@ -71,3 +71,10 @@ describe('sharing and boards', () => {
     expect(screen.getByRole('button', { name: 'link copied' })).toBeInTheDocument();
   });
 });
+
+test('export png calls onExport', () => {
+  const onExport = jest.fn();
+  render(<Toolbar tool="pen" color="#000000" onToolChange={() => {}} onColorChange={() => {}} onClear={() => {}} boardId="b" onExport={onExport} />);
+  fireEvent.click(screen.getByRole('button', { name: 'export png' }));
+  expect(onExport).toHaveBeenCalledTimes(1);
+});

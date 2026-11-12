@@ -1,10 +1,11 @@
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
-import { Stage, Layer, Line } from 'react-konva';
+import { Stage, Layer, Line, Rect } from 'react-konva';
 import { socket } from '../socket';
 import { me } from '../identity';
 import { throttle } from '../utils/throttle';
 import { createBatcher } from '../utils/batcher';
 import { useWindowSize } from '../hooks/useWindowSize';
+import { exportBoardPng } from '../utils/exportBoard';
 import Cursors from './Cursors';
 import StickyNote, { NOTE_WIDTH, NOTE_HEIGHT } from './StickyNote';
 
@@ -31,6 +32,8 @@ const Board = forwardRef(function Board({ boardId, tool, color, onNotePlaced, on
   // Your own finished strokes, newest last, for undo and redo.
   const undoStack = useRef([]);
   const redoStack = useRef([]);
+  const stageRef = useRef(null);
+  const cursorLayerRef = useRef(null);
   const strokesRef = useRef(strokes);
   strokesRef.current = strokes;
 
@@ -140,6 +143,13 @@ const Board = forwardRef(function Board({ boardId, tool, color, onNotePlaced, on
     setStrokes((s) => s.map((st) => (st.id === current.id ? current : st)));
   };
 
+  // A touch is followed by compatibility mouse events unless it is cancelled,
+  // which would draw the same tap a second time.
+  const forTouch = (handler) => (e) => {
+    if (e.evt?.cancelable) e.evt.preventDefault();
+    handler(e);
+  };
+
   const handleMouseUp = () => {
     if (!drawing.current) return;
     pointBatcher.flush();
@@ -177,7 +187,10 @@ const Board = forwardRef(function Board({ boardId, tool, color, onNotePlaced, on
     reportHistory();
   };
 
-  useImperativeHandle(ref, () => ({ undo, redo }));
+  const exportPng = () =>
+    exportBoardPng({ stage: stageRef.current, cursorLayer: cursorLayerRef.current, boardId });
+
+  useImperativeHandle(ref, () => ({ undo, redo, exportPng }));
 
   // Cmd/Ctrl+Z undoes, Shift+Cmd/Ctrl+Z or Ctrl+Y redoes. Typing in a note
   // keeps the browser's own text undo.
@@ -257,12 +270,20 @@ const Board = forwardRef(function Board({ boardId, tool, color, onNotePlaced, on
   return (
     <>
       <Stage
+        ref={stageRef}
         width={width}
         height={height}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
+        onTouchStart={forTouch(handleMouseDown)}
+        onTouchMove={forTouch(handleMouseMove)}
+        onTouchEnd={forTouch(handleMouseUp)}
       >
+        {/* Paper colour, so exported images are not transparent. */}
+        <Layer listening={false}>
+          <Rect width={width} height={height} fill="#fafafa" />
+        </Layer>
         <Layer>
           {strokes.map((s) => (
             <Line
@@ -290,7 +311,7 @@ const Board = forwardRef(function Board({ boardId, tool, color, onNotePlaced, on
             />
           ))}
         </Layer>
-        <Layer listening={false}>
+        <Layer ref={cursorLayerRef} listening={false}>
           <Cursors cursors={cursors} />
         </Layer>
       </Stage>

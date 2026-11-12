@@ -4,6 +4,7 @@ body { margin: 0; font-family: system-ui, sans-serif; overflow: hidden; backgrou
   position: fixed; top: 12px; left: 12px; z-index: 10;
   display: flex; gap: 8px; align-items: center;
   padding: 8px; background: #fff; border: 1px solid #ddd; border-radius: 8px;
+  flex-wrap: wrap; max-width: calc(100vw - 24px);
 }
 .toolbar button[aria-pressed='true'] { background: #222; color: #fff; }
 .note-editor {
@@ -14,3 +15,5 @@ body { margin: 0; font-family: system-ui, sans-serif; overflow: hidden; backgrou
 .toolbar button.clear { margin-left: 8px; color: #b91c1c; border-color: #fca5a5; }
 .toolbar .board-name { margin-left: 8px; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; color: #666; }
 .toolbar button:disabled { opacity: 0.4; }
+/* Let the board get touch input itself instead of scrolling or zooming the page. */
+.konvajs-content { touch-action: none; }
