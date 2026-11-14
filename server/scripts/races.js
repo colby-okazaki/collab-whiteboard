@@ -20,6 +20,11 @@ const TO = arg('to', FROM);
 const TRIALS = Number(arg('trials', 500));
 const CLIENTS = Number(arg('clients', 10));
 const board = `bench-races-${Date.now()}`;
+// Each connection is rate limited (100 messages a second on average by
+// default). Pacing the trials keeps this test under that, so it measures
+// conflicts and not the limiter.
+const PACE_MS = Number(arg('pace', 40));
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const connect = (url) =>
   new Promise((resolve, reject) => {
@@ -28,7 +33,14 @@ const connect = (url) =>
     socket.once('board:snapshot', () => resolve(socket));
     socket.on('connect', () => socket.emit('board:join', board));
   });
-const call = (socket, event, data) => new Promise((resolve) => socket.emit(event, data, resolve));
+const call = (socket, event, data) =>
+  new Promise((resolve, reject) =>
+    socket.emit(event, data, (res) =>
+      res && res.reason === 'rate_limited'
+        ? reject(new Error('the server rate limited this test; raise --pace or the RATE_LIMIT_* settings'))
+        : resolve(res)
+    )
+  );
 
 async function main() {
   const clients = await Promise.all(Array.from({ length: CLIENTS }, (_, i) => connect(i % 2 ? TO : FROM)));
@@ -36,6 +48,7 @@ async function main() {
   let contestedAttempts = 0;
 
   for (let t = 0; t < TRIALS; t++) {
+    await sleep(PACE_MS);
     const id = `note-${t}`;
     await call(clients[0], 'note:add', { id, x: 0, y: 0, text: '', color: '#fff59d' });
 
@@ -81,7 +94,8 @@ async function main() {
   if (total > 0) process.exitCode = 1;
 }
 
-main().catch((err) => {
+main().catch(async (err) => {
   console.error('Race test failed:', err.message || err);
+  await cleanupBoard(board).catch(() => {});
   process.exit(1);
 });

@@ -329,6 +329,101 @@ describe('undo and redo', () => {
   });
 });
 
+describe('rate limiting', () => {
+  const { io: connect } = require('socket.io-client');
+  let running;
+  const clients = [];
+  let warn;
+  beforeEach(() => {
+    warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+  afterEach(async () => {
+    clients.splice(0).forEach((c) => c.disconnect());
+    await new Promise((resolve) => running.io.close(resolve));
+    warn.mockRestore();
+  });
+
+  async function open(options) {
+    running = await start(options);
+  }
+  async function join(boardId) {
+    const socket = connect(running.url, { transports: ['websocket'] });
+    clients.push(socket);
+    await new Promise((resolve) => {
+      socket.once('board:snapshot', resolve);
+      socket.emit('board:join', boardId);
+    });
+    return socket;
+  }
+  const addNote = (socket, i) =>
+    new Promise((resolve) => socket.emit('note:add', { id: `n${i}`, x: i, y: 0, color: '#fff59d' }, resolve));
+
+  test('refuses messages from a client that sends too fast, and says so', async () => {
+    await open({ rateLimit: { capacity: 6, perSecond: 0.001 } });
+    const flooder = await join('rate-1');
+    // Joining used one of the six.
+    const replies = [];
+    for (let i = 0; i < 10; i++) replies.push(await addNote(flooder, i));
+    expect(replies.filter((r) => r.ok)).toHaveLength(5);
+    expect(replies.filter((r) => r.reason === 'rate_limited')).toHaveLength(5);
+  });
+
+  test("one client's flood does not slow anyone else down", async () => {
+    await open({ rateLimit: { capacity: 6, perSecond: 0.001 } });
+    const flooder = await join('rate-2');
+    const bystander = await join('rate-2');
+    for (let i = 0; i < 10; i++) await addNote(flooder, i);
+    expect((await addNote(bystander, 100)).ok).toBe(true);
+  });
+
+  test('refused notes never reach the board', async () => {
+    await open({ rateLimit: { capacity: 3, perSecond: 0.001 } });
+    const flooder = await join('rate-3');
+    for (let i = 0; i < 8; i++) await addNote(flooder, i);
+    const { notes } = await new Promise((resolve) => {
+      const late = connect(running.url, { transports: ['websocket'] });
+      clients.push(late);
+      late.once('board:snapshot', resolve);
+      late.emit('board:join', 'rate-3');
+    });
+    expect(Object.keys(notes)).toHaveLength(2);
+  });
+
+  test('allows messages again once the client slows down', async () => {
+    await open({ rateLimit: { capacity: 3, perSecond: 50 } });
+    const socket = await join('rate-4');
+    for (let i = 0; i < 6; i++) await addNote(socket, i);
+    await new Promise((r) => setTimeout(r, 150));
+    expect((await addNote(socket, 99)).ok).toBe(true);
+  });
+
+  test('logs how many messages were dropped when the client leaves', async () => {
+    await open({ rateLimit: { capacity: 6, perSecond: 0.001 } });
+    const flooder = await join('rate-6');
+    for (let i = 0; i < 10; i++) await addNote(flooder, i);
+    flooder.disconnect();
+    await new Promise((r) => setTimeout(r, 100));
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('Dropped 5 messages'));
+  });
+
+  test('stays quiet for a client that behaved', async () => {
+    await open();
+    const socket = await join('rate-7');
+    await addNote(socket, 1);
+    socket.disconnect();
+    await new Promise((r) => setTimeout(r, 100));
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  test('the default limit leaves plenty of room for normal use', async () => {
+    await open();
+    const socket = await join('rate-5');
+    const replies = [];
+    for (let i = 0; i < 100; i++) replies.push(await addNote(socket, i));
+    expect(replies.every((r) => r.ok)).toBe(true);
+  });
+});
+
 describe('shutting down', () => {
   const { io: connect } = require('socket.io-client');
 

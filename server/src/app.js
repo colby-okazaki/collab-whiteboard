@@ -3,11 +3,15 @@ const http = require('http');
 const cors = require('cors');
 const { Server } = require('socket.io');
 const validate = require('./validate');
+const { createRateLimiter } = require('./rateLimit');
+
+// Per connection. Real use peaks around 50 messages a second.
+const DEFAULT_RATE_LIMIT = { capacity: 200, perSecond: 100 };
 
 // Builds the HTTP + Socket.io server around a board store (live state) and a
 // persistence layer (durable storage). index.js picks the implementations;
 // tests use this directly to run several instances side by side.
-function createApp({ store, db, clientOrigin, adapter, staticDir }) {
+function createApp({ store, db, clientOrigin, adapter, staticDir, rateLimit = DEFAULT_RATE_LIMIT }) {
   const app = express();
   app.use(cors({ origin: clientOrigin }));
   app.get('/health', (_req, res) => res.json({ ok: true }));
@@ -53,6 +57,8 @@ function createApp({ store, db, clientOrigin, adapter, staticDir }) {
   io.on('connection', (socket) => {
     // Strokes this socket has started but not finished, saved if it drops.
     socket.data.openStrokes = new Set();
+    const limiter = createRateLimiter(rateLimit);
+    let dropped = 0;
     // Strokes this socket drew, the only ones it may undo.
     socket.data.ownStrokes = new Set();
 
@@ -64,6 +70,12 @@ function createApp({ store, db, clientOrigin, adapter, staticDir }) {
     // and acked writes get an error reply.
     const on = (event, parse, handler) =>
       socket.on(event, async (payload, ack) => {
+        // A flooding client is dropped message by message, before any
+        // validation or store work is spent on it.
+        if (!limiter.allow()) {
+          dropped += 1;
+          return reply(ack, { ok: false, reason: 'rate_limited' });
+        }
         try {
           const clean = parse(payload);
           if (clean === null) return reply(ack, { ok: false, reason: 'invalid' });
@@ -200,6 +212,7 @@ function createApp({ store, db, clientOrigin, adapter, staticDir }) {
     });
 
     socket.on('disconnect', () => {
+      if (dropped) console.warn(`Dropped ${dropped} messages from ${socket.id} for sending too fast`);
       const boardId = boardOf();
       if (!boardId) return;
       socket.to(boardId).emit('cursor:leave', socket.id);

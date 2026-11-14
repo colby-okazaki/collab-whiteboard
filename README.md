@@ -124,6 +124,10 @@ The server doesn't trust clients. Every socket payload is checked in `server/src
 - Coordinates must be finite numbers within bounds, stroke batches are capped (400 values per message), and colors, tools and text lengths are checked.
 - Only known fields are copied through, so clients can't inject extra properties such as a note's `version` or `lockedBy`.
 
+### Rate limiting
+
+Each connection gets a token bucket (`server/src/rateLimit.js`): a burst of 200 messages, then 100 a second on average. Real use stays far below that, since cursor moves are throttled to 20 a second and stroke points are batched about every 40ms, so only a client that floods the server hits it. Excess messages are dropped before any validation or store work is spent on them, and writes that expect a reply get `{ ok: false, reason: 'rate_limited' }`. One client's flood doesn't slow anyone else, because each connection has its own bucket. The server logs how many messages it dropped when that client disconnects. Tune it with `RATE_LIMIT_CAPACITY` and `RATE_LIMIT_PER_SECOND`.
+
 ## Measured results
 
 All numbers come from the scripts in this repo and were measured on a single laptop, with the load generator, both server instances, PostgreSQL and Redis all running on it. That makes them a fair test of the server and the Redis hop, but they exclude internet delay, so real-world latency is these numbers plus the network round trip.
@@ -155,7 +159,7 @@ Up to 500 connected users, p99 stayed under 40 ms. At 300 users with 30 of them 
 
 ### Conflict resolution under stress
 
-`npm run bench:races -w server` has 10 users on two server instances grab the same sticky note at the same instant, 500 times (5,000 simultaneous lock attempts). Each trial checks that exactly one user gets the lock, that nobody else can commit while it is held, that the holder's commit is accepted, that a commit based on an old version is rejected as stale, and that the note ends up exactly as the holder left it. Result: 0 violations across all checks.
+`npm run bench:races -w server` has 10 users on two server instances grab the same sticky note at the same instant, 500 times (5,000 simultaneous lock attempts). Each trial checks that exactly one user gets the lock, that nobody else can commit while it is held, that the holder's commit is accepted, that a commit based on an old version is rejected as stale, and that the note ends up exactly as the holder left it. Trials are paced 40ms apart (`--pace`) so the test stays under the per-connection rate limit; if it is ever limited, it stops with an error instead of reporting false conflicts. Result: 0 violations across all checks, with the rate limiter on.
 
 To confirm the test can fail, it was also run against a server patched to grant every lock; that run reported violations in every trial and exited with an error.
 
@@ -172,16 +176,16 @@ Payload bytes for stroke points are 29-35% lower. Byte counts cover the JSON pay
 
 ### Tests and coverage
 
-`npm test` runs 225 tests (135 server, 90 client), and `npm run coverage` reports coverage:
+`npm test` runs 238 tests (148 server, 90 client), and `npm run coverage` reports coverage:
 
 | | Statements | Lines | Functions | Branches |
 |---|---|---|---|---|
-| Server | 82% | 83% | 89% | 80% |
+| Server | 83% | 83% | 89% | 79% |
 | Client | 98% | 99% | 99% | 81% |
 
-The server figure includes the integration tests that run against real PostgreSQL and Redis. The uncovered server code is mostly `index.js`, the startup and signal-handling entry point, which is checked by CI starting the real container instead. Client tests cover drawing, streamed updates from other users, note dragging and editing (including lock denials, rolled-back commits and lock renewal), clearing the board, undo and redo, and switching and sharing boards, touch drawing, and exporting an image. The one client file with no coverage is `socket.js`, which reads Vite's `import.meta` and can't be loaded under Jest. The component tests replace the Konva canvas with plain elements, so they check behavior rather than pixels.
+The server figure includes the integration tests that run against real PostgreSQL and Redis. The uncovered server code is mostly `index.js`, the startup and signal-handling entry point, which is checked by CI starting the real container instead. Client tests cover drawing, streamed updates from other users, note dragging and editing (including lock denials, rolled-back commits and lock renewal), clearing the board, undo and redo, and switching and sharing boards, touch drawing, and exporting an image. Server tests also cover rate limiting. The one client file with no coverage is `socket.js`, which reads Vite's `import.meta` and can't be loaded under Jest. The component tests replace the Konva canvas with plain elements, so they check behavior rather than pixels.
 
-The app is about 1,600 lines of source across 20 files, plus about 2,150 lines of tests.
+The app is about 1,600 lines of source across 21 files, plus about 2,300 lines of tests.
 
 ## Scaling across instances
 

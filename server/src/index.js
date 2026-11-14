@@ -10,6 +10,11 @@ const { RedisBoardStore } = require('./store/redisStore');
 const PORT = process.env.PORT || 4000;
 const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN || 'http://localhost:5173';
 const { DATABASE_URL, REDIS_URL } = process.env;
+// Per-connection flood protection (see rateLimit.js); both can be tuned.
+const rateLimit = {
+  capacity: Number(process.env.RATE_LIMIT_CAPACITY) || 200,
+  perSecond: Number(process.env.RATE_LIMIT_PER_SECOND) || 100,
+};
 const CLIENT_DIST = path.join(__dirname, '..', '..', 'client', 'dist');
 
 // With REDIS_URL, live state and Socket.io broadcasts are shared through
@@ -38,6 +43,7 @@ async function main() {
     db,
     clientOrigin: CLIENT_ORIGIN,
     adapter,
+    rateLimit,
     staticDir: fs.existsSync(CLIENT_DIST) ? CLIENT_DIST : undefined,
   });
   server.listen(PORT, () => {
