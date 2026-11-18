@@ -1,4 +1,4 @@
-name: CI
+name: CI/CD
 
 on:
   push:
@@ -56,14 +56,28 @@ jobs:
         run: npm run build -w client
 
   # Builds the production image and checks that the container really starts,
-  # serves the client, and exits cleanly when stopped.
+  # serves the client, and exits cleanly when stopped. Runs only after the
+  # tests pass. On pushes to main the verified image is then published.
   docker:
+    needs: test
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    env:
+      IMAGE: ghcr.io/${{ github.repository }}
     steps:
       - uses: actions/checkout@v4
 
       - name: Build image
-        run: docker build -t whiteboard .
+        run: |
+          # Registry names must be lowercase.
+          IMAGE="${IMAGE,,}"
+          echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
+          docker build \
+            --label "org.opencontainers.image.source=https://github.com/${{ github.repository }}" \
+            --label "org.opencontainers.image.revision=${{ github.sha }}" \
+            -t whiteboard .
 
       - name: Start container and check it responds
         run: |
@@ -79,3 +93,32 @@ jobs:
         run: |
           docker stop whiteboard
           test "$(docker inspect whiteboard --format '{{.State.ExitCode}}')" = "0"
+
+      # Delivery: only a main-branch build that passed every check above is
+      # published, tagged with its commit and as latest.
+      - name: Publish image to GitHub Container Registry
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          docker tag whiteboard "$IMAGE:sha-${GITHUB_SHA::7}"
+          docker tag whiteboard "$IMAGE:latest"
+          docker push "$IMAGE:sha-${GITHUB_SHA::7}"
+          docker push "$IMAGE:latest"
+
+  # Deployment: asks the host to pull the newly published image. It does
+  # nothing until a DEPLOY_HOOK_URL secret (the host's deploy hook) is added
+  # to the repository.
+  deploy:
+    needs: docker
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    env:
+      DEPLOY_HOOK_URL: ${{ secrets.DEPLOY_HOOK_URL }}
+    steps:
+      - name: Trigger deployment
+        run: |
+          if [ -z "$DEPLOY_HOOK_URL" ]; then
+            echo "No DEPLOY_HOOK_URL secret is set, so nothing was deployed."
+            exit 0
+          fi
+          curl -fsS -X POST "$DEPLOY_HOOK_URL"

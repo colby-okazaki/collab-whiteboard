@@ -1,6 +1,6 @@
 # Collaborative Whiteboard
 
-[![CI](https://github.com/Coa1B/collab-whiteboard/actions/workflows/ci.yml/badge.svg)](https://github.com/Coa1B/collab-whiteboard/actions/workflows/ci.yml)
+[![CI/CD](https://github.com/Coa1B/collab-whiteboard/actions/workflows/ci.yml/badge.svg)](https://github.com/Coa1B/collab-whiteboard/actions/workflows/ci.yml)
 
 A real-time shared canvas where multiple users draw and collaborate at the same time and see each other's changes instantly.
 
@@ -44,7 +44,7 @@ Then open `http://localhost:5173/?server=http://localhost:4001` next to a window
 
 ### Tests
 
-GitHub Actions runs everything below on every push and pull request, against real PostgreSQL and Redis services.
+GitHub Actions runs the tests below on every push and pull request, against real PostgreSQL and Redis services (see CI/CD above).
 
 ```bash
 npm test                            # unit and component tests
@@ -54,6 +54,20 @@ npm run bench -w server             # sync latency benchmark (needs a running se
 npm run bench:load -w server        # concurrent-user load test
 npm run bench:races -w server       # conflict-resolution stress test
 npm run bench:batching              # traffic saved by batching and throttling
+```
+
+## CI/CD
+
+`.github/workflows/ci.yml` runs on every push and pull request:
+
+1. **test**: unit and component tests, integration tests against real PostgreSQL and Redis service containers, and the client build.
+2. **docker** (after `test` passes): builds the production image, starts the container, checks it serves the client and `/health`, and checks it exits cleanly on SIGTERM. On a push to `main` the verified image is then published to GitHub Container Registry as `ghcr.io/coa1b/collab-whiteboard`, tagged with the commit (`sha-1234567`) and `latest`.
+3. **deploy** (pushes to `main` only): calls a hosting provider's deploy hook so it pulls the new image. This does nothing until a `DEPLOY_HOOK_URL` secret is added to the repository, and it says so in its log. Nothing is deployed yet.
+
+Pull requests run the tests and the container check but never publish. Run a published build with:
+
+```bash
+docker run -p 8080:4000 ghcr.io/coa1b/collab-whiteboard:latest
 ```
 
 ## Project layout
