@@ -71,7 +71,7 @@ describe('dragging a note', () => {
   test('asks the server for the lock when the drag starts', () => {
     serverReplies({ 'note:lock': { ok: true } });
     click('start n1');
-    expect(emitted('note:lock')).toEqual([expect.objectContaining({ id: 'n1', name: expect.any(String) })]);
+    expect(emitted('note:lock')).toEqual([{ id: 'n1' }]);
     expect(mockNode.stopDrag).not.toHaveBeenCalled();
   });
 

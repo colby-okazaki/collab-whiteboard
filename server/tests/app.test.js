@@ -514,7 +514,8 @@ describe('who is who', () => {
     const bob = await join('who-5');
     const seen = next(bob, 'cursor:move');
     alice.emit('cursor:move', { x: 5, y: 6, name: 'Alice', color: '#000000' });
-    expect(await seen).toEqual({ id: alice.id, x: 5, y: 6, name: 'Alice', color: alice.you.color });
+    // Only where it is and whose it is: no name, and not the color claimed.
+    expect(await seen).toEqual({ id: alice.id, x: 5, y: 6, color: alice.you.color });
   });
 
   test('a note you are editing shows your assigned color, not one you made up', async () => {
@@ -527,7 +528,7 @@ describe('who is who', () => {
     await added;
     const locked = next(bob, 'note:upsert');
     const res = await new Promise((resolve) => alice.emit('note:lock', { id: 'n1', name: 'Alice', color: '#123456' }, resolve));
-    expect(res.note.lockedBy).toMatchObject({ name: 'Alice', color: alice.you.color });
+    expect(res.note.lockedBy).toEqual({ id: alice.id, color: alice.you.color, expiresAt: expect.any(Number) });
     expect((await locked).lockedBy.color).toBe(alice.you.color);
   });
 });

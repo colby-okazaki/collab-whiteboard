@@ -112,18 +112,20 @@ describe('strokePoints', () => {
   });
 });
 
-describe('cursor', () => {
-  test('cleans the name and falls back to a neutral color', () => {
-    expect(validate.cursor({ x: 1, y: 2, name: '  Guest\u0000 7  ', color: 'nope' })).toEqual({
-      x: 1,
-      y: 2,
-      name: 'Guest 7',
-      color: '#888888',
-    });
+describe('noteLock', () => {
+  test('keeps only the note id, never a name or color from the client', () => {
+    expect(validate.noteLock({ id: 'n1', name: 'Guest 7', color: '#ff0000' })).toEqual({ id: 'n1' });
   });
 
-  test('truncates long names', () => {
-    expect(validate.cursor({ x: 0, y: 0, name: 'x'.repeat(100), color: '#fff' }).name).toHaveLength(30);
+  test('rejects a bad id', () => {
+    expect(validate.noteLock({ id: 'a b' })).toBeNull();
+    expect(validate.noteLock(null)).toBeNull();
+  });
+});
+
+describe('cursor', () => {
+  test('keeps only the position: who it is and what color comes from the server', () => {
+    expect(validate.cursor({ x: 1, y: 2, name: 'Guest 7', color: '#ff0000', extra: 'x' })).toEqual({ x: 1, y: 2 });
   });
 
   test('rejects missing or non-finite coordinates', () => {

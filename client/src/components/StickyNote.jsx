@@ -39,7 +39,7 @@ export default function StickyNote({ note, lockedByOther, onDragStart, onDragMov
         fill="#222"
       />
       {lockedByOther && (
-        <Text text={`${lock.name} is editing`} y={-18} fontSize={12} fill={lock.color} />
+        <Text text="editing" y={-18} fontSize={12} fill={lock.color} />
       )}
     </Group>
   );

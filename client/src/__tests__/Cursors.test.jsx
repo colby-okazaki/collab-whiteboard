@@ -8,13 +8,13 @@ jest.mock('react-konva', () => {
       {children}
     </div>
   );
-  return { Group: el('group'), Circle: el('circle'), Label: el('label'), Tag: el('tag'), Text: el('text') };
+  return { Group: el('group'), Circle: el('circle'), Text: el('text') };
 });
 
 const props = (element) => JSON.parse(element.dataset.props);
 const cursors = {
-  a: { id: 'a', x: 10, y: 20, name: 'Guest 7', color: '#2563eb' },
-  b: { id: 'b', x: 300, y: 400, name: 'Guest 12', color: '#16a34a' },
+  a: { id: 'a', x: 10, y: 20, color: '#2563eb' },
+  b: { id: 'b', x: 300, y: 400, color: '#16a34a' },
 };
 
 test('shows one cursor for each person, at their position', () => {
@@ -35,16 +35,20 @@ test('draws a ring in the persons color, on a white halo so it shows on anything
   expect(circles).toContainEqual(expect.objectContaining({ fill: '#2563eb' }));
 });
 
-test('puts the name on a tag in the same color', () => {
-  render(<Cursors cursors={{ a: cursors.a }} />);
-  expect(props(screen.getByTestId('tag'))).toMatchObject({ fill: '#2563eb' });
-  expect(props(screen.getByTestId('text'))).toMatchObject({ text: 'Guest 7', fill: '#ffffff' });
+test('shows no names or labels, only the ring', () => {
+  render(<Cursors cursors={cursors} />);
+  expect(screen.queryByTestId('text')).toBeNull();
+  expect(screen.getAllByTestId('circle')).toHaveLength(6);
 });
 
 test('different people get different colors on screen', () => {
   render(<Cursors cursors={cursors} />);
-  const tags = screen.getAllByTestId('tag').map((t) => props(t).fill);
-  expect(new Set(tags).size).toBe(2);
+  const rings = screen
+    .getAllByTestId('circle')
+    .map(props)
+    .filter((c) => c.stroke && c.stroke !== '#ffffff')
+    .map((c) => c.stroke);
+  expect(rings).toEqual(['#2563eb', '#16a34a']);
 });
 
 test('stays the same size on screen however far the board is zoomed', () => {

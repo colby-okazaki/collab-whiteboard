@@ -97,10 +97,10 @@ describeRedis('multiple server instances', () => {
     const bob = await join(b, 'notes');
     await call(alice.socket, 'note:add', { id: 'n1', x: 0, y: 0, color: '#fff59d' });
 
-    expect((await call(alice.socket, 'note:lock', { id: 'n1', name: 'Alice' })).ok).toBe(true);
-    const denied = await call(bob.socket, 'note:lock', { id: 'n1', name: 'Bob' });
+    expect((await call(alice.socket, 'note:lock', { id: 'n1' })).ok).toBe(true);
+    const denied = await call(bob.socket, 'note:lock', { id: 'n1' });
     expect(denied).toMatchObject({ ok: false, reason: 'locked' });
-    expect(denied.note.lockedBy.name).toBe('Alice');
+    expect(denied.note.lockedBy.id).toBe(alice.socket.id);
   });
 
   test('simultaneous lock attempts from two instances produce exactly one winner', async () => {
@@ -109,8 +109,8 @@ describeRedis('multiple server instances', () => {
     await call(alice.socket, 'note:add', { id: 'n1', x: 0, y: 0, color: '#fff59d' });
 
     const results = await Promise.all([
-      call(alice.socket, 'note:lock', { id: 'n1', name: 'Alice' }),
-      call(bob.socket, 'note:lock', { id: 'n1', name: 'Bob' }),
+      call(alice.socket, 'note:lock', { id: 'n1' }),
+      call(bob.socket, 'note:lock', { id: 'n1' }),
     ]);
     expect(results.filter((r) => r.ok)).toHaveLength(1);
   });

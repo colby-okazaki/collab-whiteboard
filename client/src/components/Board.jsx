@@ -1,7 +1,6 @@
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { Stage, Layer, Rect } from 'react-konva';
 import { socket } from '../socket';
-import { me } from '../identity';
 import { throttle } from '../utils/throttle';
 import { createBatcher } from '../utils/batcher';
 import { useWindowSize } from '../hooks/useWindowSize';
@@ -62,7 +61,7 @@ const Board = forwardRef(function Board({ boardId, tool, color, onNotePlaced, on
   const putNote = (note) => setNotes((ns) => ({ ...ns, [note.id]: note }));
 
   const sendCursor = useMemo(
-    () => throttle((x, y) => socket.emit('cursor:move', { x, y, ...me }), CURSOR_THROTTLE_MS),
+    () => throttle((x, y) => socket.emit('cursor:move', { x, y }), CURSOR_THROTTLE_MS),
     []
   );
 
@@ -299,7 +298,7 @@ const Board = forwardRef(function Board({ boardId, tool, color, onNotePlaced, on
   // Keep the lock alive for as long as the editor is open.
   useEffect(() => {
     if (!editingId) return undefined;
-    const timer = setInterval(() => socket.emit('note:lock', { id: editingId, ...me }), LOCK_REFRESH_MS);
+    const timer = setInterval(() => socket.emit('note:lock', { id: editingId }), LOCK_REFRESH_MS);
     return () => clearInterval(timer);
   }, [editingId]);
 
@@ -313,7 +312,7 @@ const Board = forwardRef(function Board({ boardId, tool, color, onNotePlaced, on
 
   const handleNoteDragStart = (note) => (e) => {
     const node = e.target;
-    socket.emit('note:lock', { id: note.id, ...me }, (res) => {
+    socket.emit('note:lock', { id: note.id }, (res) => {
       if (res.ok) return;
       node.stopDrag();
       if (res.note) revert(node, res.note);
@@ -335,7 +334,7 @@ const Board = forwardRef(function Board({ boardId, tool, color, onNotePlaced, on
   };
 
   const handleNoteDblClick = (note) => () => {
-    socket.emit('note:lock', { id: note.id, ...me }, (res) => {
+    socket.emit('note:lock', { id: note.id }, (res) => {
       if (res.ok) {
         editCancelled.current = false;
         setEditingId(note.id);

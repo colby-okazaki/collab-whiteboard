@@ -3,7 +3,6 @@
 // is malformed, so handlers only ever work with well-formed data.
 
 const MAX_ID_LENGTH = 64;
-const MAX_NAME_LENGTH = 30;
 const MAX_POINTS_PER_MESSAGE = 400; // 200 x/y pairs, about 8s of drawing at 40ms batches
 const MAX_POINTS_PER_STROKE = 20_000; // a whole stroke being restored by redo
 const MAX_COORD = 100_000;
@@ -22,10 +21,6 @@ const isColor = (v) => typeof v === 'string' && COLOR_PATTERN.test(v);
 // A flat [x1, y1, x2, y2, ...] list.
 const isPointList = (v, max) =>
   Array.isArray(v) && v.length > 0 && v.length <= max && v.length % 2 === 0 && v.every(isCoord);
-
-// Names are shown to other users, so keep them short and strip control characters.
-const cleanName = (v) =>
-  typeof v === 'string' ? v.replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, MAX_NAME_LENGTH) : '';
 
 function boardId(v) {
   return isId(v) ? v : null;
@@ -60,7 +55,7 @@ function strokeId(p) {
 
 function cursor(p) {
   if (!isObject(p) || !isCoord(p.x) || !isCoord(p.y)) return null;
-  return { x: p.x, y: p.y, name: cleanName(p.name), color: isColor(p.color) ? p.color : '#888888' };
+  return { x: p.x, y: p.y };
 }
 
 function noteAdd(p) {
@@ -71,7 +66,7 @@ function noteAdd(p) {
 
 function noteLock(p) {
   if (!isObject(p) || !isId(p.id)) return null;
-  return { id: p.id, name: cleanName(p.name), color: isColor(p.color) ? p.color : '#888888' };
+  return { id: p.id };
 }
 
 function noteMove(p) {

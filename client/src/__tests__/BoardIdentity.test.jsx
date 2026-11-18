@@ -74,27 +74,25 @@ describe('your own pointer', () => {
 });
 
 describe('what you send about yourself', () => {
-  test('your cursor carries your name but not a color, since the server decides that', () => {
+  test('your cursor carries only where it is: no name, no color, since the server decides who you are', () => {
     render(<Board boardId="room" tool="pen" color="#111111" />);
     fireEvent.mouseMove(screen.getByTestId('stage'), { clientX: 5, clientY: 6 });
-    const [message] = emitted('cursor:move');
-    expect(message).toMatchObject({ x: 5, y: 6, name: expect.stringMatching(/^Guest \d+$/) });
-    expect(message).not.toHaveProperty('color');
+    expect(emitted('cursor:move')).toEqual([{ x: 5, y: 6 }]);
   });
 });
 
 describe("other people's cursors", () => {
-  test('appear in their own color, with their name', () => {
+  test('appear as a ring, with no name', () => {
     render(<Board boardId="room" tool="pen" color="#111111" />);
-    receive('cursor:move', { id: 'other', x: 5, y: 6, name: 'Guest 7', color: '#2563eb' });
-    expect(screen.getAllByTestId('text').some((t) => t.dataset.text === 'Guest 7')).toBe(true);
-    expect(screen.getAllByTestId('tag')).toHaveLength(1);
+    receive('cursor:move', { id: 'other', x: 5, y: 6, color: '#2563eb' });
+    expect(screen.getAllByTestId('circle')).toHaveLength(3);
+    expect(screen.queryAllByTestId('text')).toHaveLength(0);
   });
 
   test('disappear when the person leaves', () => {
     render(<Board boardId="room" tool="pen" color="#111111" />);
-    receive('cursor:move', { id: 'other', x: 5, y: 6, name: 'Guest 7', color: '#2563eb' });
+    receive('cursor:move', { id: 'other', x: 5, y: 6, color: '#2563eb' });
     receive('cursor:leave', 'other');
-    expect(screen.queryAllByTestId('tag')).toHaveLength(0);
+    expect(screen.queryAllByTestId('circle')).toHaveLength(0);
   });
 });

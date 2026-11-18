@@ -45,12 +45,12 @@ async function main() {
   });
 
   // Warm up the connections so the first messages don't skew results.
-  for (let i = 0; i < 20; i++) sender.emit('cursor:move', { x: -1, y: 0, name: 'bench', color: '#000' });
+  for (let i = 0; i < 20; i++) sender.emit('cursor:move', { x: -1, y: 0 });
   await new Promise((r) => setTimeout(r, 300));
 
   for (let seq = 0; seq < COUNT; seq++) {
     sentAt.set(seq, process.hrtime.bigint());
-    sender.emit('cursor:move', { x: seq, y: 0, name: 'bench', color: '#000' });
+    sender.emit('cursor:move', { x: seq, y: 0 });
     await new Promise((r) => setTimeout(r, INTERVAL_MS));
   }
 

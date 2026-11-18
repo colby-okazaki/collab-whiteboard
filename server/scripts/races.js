@@ -53,7 +53,7 @@ async function main() {
     await call(clients[0], 'note:add', { id, x: 0, y: 0, text: '', color: '#fff59d' });
 
     // 1. Everyone grabs the note at once.
-    const grabs = await Promise.all(clients.map((c, i) => call(c, 'note:lock', { id, name: `user${i}`, color: '#000000' })));
+    const grabs = await Promise.all(clients.map((c, i) => call(c, 'note:lock', { id })));
     contestedAttempts += grabs.length;
     const winners = grabs.map((r, i) => (r.ok ? i : -1)).filter((i) => i >= 0);
     if (winners.length > 1) violations.doubleGrant++;
@@ -72,12 +72,12 @@ async function main() {
 
     // 4. A commit based on the old version must be rejected as stale.
     const late = others[0];
-    await call(clients[late], 'note:lock', { id, name: 'late', color: '#000000' });
+    await call(clients[late], 'note:lock', { id });
     const stale = await call(clients[late], 'note:commit', { id, baseVersion: 1, changes: { text: 'stale write' } });
     if (stale.ok) violations.staleAccepted++;
 
     // 5. The note ends up exactly as the holder left it.
-    const final = await call(clients[others[1]], 'note:lock', { id, name: 'check', color: '#000000' });
+    const final = await call(clients[others[1]], 'note:lock', { id });
     if (!final.ok || final.note.text !== text || final.note.version !== 2) violations.wrongFinalState++;
     clients[others[1]].emit('note:unlock', { id }); // fire-and-forget: the server sends no ack
   }

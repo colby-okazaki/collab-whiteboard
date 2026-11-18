@@ -159,10 +159,10 @@ function createApp({ store, db, clientOrigin, adapter, staticDir, rateLimit = DE
     });
 
     // Cursors are ephemeral: relayed to the room, never stored.
-    on('cursor:move', validate.cursor, ({ x, y, name }) => {
+    on('cursor:move', validate.cursor, ({ x, y }) => {
       const boardId = boardOf();
       if (!boardId) return;
-      socket.to(boardId).emit('cursor:move', { id: socket.id, x, y, name, color: socket.data.color });
+      socket.to(boardId).emit('cursor:move', { id: socket.id, x, y, color: socket.data.color });
     });
 
     // Sticky notes. Writes are acknowledged so the client can roll back
@@ -177,10 +177,10 @@ function createApp({ store, db, clientOrigin, adapter, staticDir, rateLimit = DE
     });
 
     // Also used by the client to refresh its lock while editing.
-    on('note:lock', validate.noteLock, async ({ id, name }, ack) => {
+    on('note:lock', validate.noteLock, async ({ id }, ack) => {
       const boardId = boardOf();
       if (!boardId) return;
-      const res = await store.lockNote(boardId, id, { id: socket.id, name, color: socket.data.color });
+      const res = await store.lockNote(boardId, id, { id: socket.id, color: socket.data.color });
       if (res.ok) io.to(boardId).emit('note:upsert', res.note);
       reply(ack, res);
     });

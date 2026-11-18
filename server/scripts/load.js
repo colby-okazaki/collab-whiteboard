@@ -46,7 +46,7 @@ async function main() {
   const timers = sockets.slice(0, ACTIVE).map((socket, i) =>
     setInterval(() => {
       sent++;
-      socket.emit('cursor:move', { x: nowMs(), y: i, name: 'bench', color: '#000000' });
+      socket.emit('cursor:move', { x: nowMs(), y: i });
     }, 1000 / RATE_HZ)
   );
 

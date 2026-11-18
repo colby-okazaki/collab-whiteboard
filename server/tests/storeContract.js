@@ -14,8 +14,8 @@ function runStoreContract(makeStore) {
     store = null;
   });
 
-  const alice = { id: 'alice', name: 'Alice', color: '#e11d48' };
-  const bob = { id: 'bob', name: 'Bob', color: '#2563eb' };
+  const alice = { id: 'alice', color: '#e11d48' };
+  const bob = { id: 'bob', color: '#2563eb' };
 
   describe('strokes', () => {
     test('a new board starts empty', async () => {
@@ -73,7 +73,7 @@ function runStoreContract(makeStore) {
       expect((await store.lockNote('a', 'n1', alice)).ok).toBe(true);
       const res = await store.lockNote('a', 'n1', bob);
       expect(res).toMatchObject({ ok: false, reason: 'locked' });
-      expect(res.note.lockedBy).toMatchObject({ id: 'alice', name: 'Alice' });
+      expect(res.note.lockedBy).toMatchObject({ id: 'alice', color: '#e11d48' });
     });
 
     test('re-locking a note you already hold succeeds and extends the lock', async () => {
