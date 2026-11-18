@@ -84,6 +84,7 @@ client/   Vite + React + react-konva frontend
 - [x] Project scaffold, socket connection, join snapshot
 - [x] Freehand pen + eraser + color picker
 - [x] Shapes: line, rectangle and ellipse
+- [x] Zoom and pan
 - [x] Live stroke streaming (points batched every 40ms)
 - [x] Sticky notes (add, edit, move)
 - [x] Live cursors (throttled to 50ms)
@@ -123,9 +124,13 @@ The board comes from the address: `?board=team-sync` opens that board, and no pa
 
 The **line**, **rect** and **ellipse** tools draw a shape by dragging from one corner (or end) to the other, in any direction. You see it as you drag, but nothing is sent until you let go, and then the finished shape goes to the server in one message (two points, `[x1, y1, x2, y2]`) instead of being streamed like a pen stroke. A shape is stored as a stroke, so undo and redo, saving to PostgreSQL, sharing with other users, and exporting all work the same way. The server checks that a shape has exactly two points and that a streamed stroke can't claim to be a shape. A drag shorter than 3 pixels is ignored, so a plain click leaves nothing behind.
 
+### Zoom and pan
+
+**Ctrl or Cmd + wheel** (and a trackpad pinch) zooms around the pointer, so whatever is under the mouse stays under it, and a plain wheel or two-finger scroll pans. The **hand** tool drags the board around, and the toolbar has zoom out, zoom in and reset buttons that show the current percentage (10% to 500%). Everything is sent in board coordinates, not screen coordinates (`client/src/utils/view.js` converts between the two), so strokes, shapes, notes and your cursor land in the right place for every user however far each of them has zoomed or panned. The note editor follows the zoomed note. Your view is yours: it is not shared or saved. Touch panning works with the hand tool, but pinch-to-zoom on a phone is not handled yet.
+
 ### Export and touch
 
-**export png** downloads the board as `whiteboard-<board>.png` at twice the screen resolution, so it stays sharp when zoomed. The image has the paper-coloured background and contains the strokes and notes; other people's cursors are hidden for the capture. It saves what is in the window, since there is no zoom or panning yet. Drawing also works with a finger: touch input is handled like the mouse, and the browser's own scrolling and zooming are switched off over the board. The toolbar wraps on narrow screens. Touch has been tried with simulated touch events, not a real phone.
+**export png** downloads the board as `whiteboard-<board>.png` at twice the screen resolution, so it stays sharp when zoomed. The image has the paper-coloured background and contains the strokes and notes; other people's cursors are hidden for the capture. It saves what is in the window, at the current zoom and position. Drawing also works with a finger: touch input is handled like the mouse, and the browser's own scrolling and zooming are switched off over the board. The toolbar wraps on narrow screens. Touch has been tried with simulated touch events, not a real phone.
 
 ### Undo and redo
 
@@ -195,16 +200,16 @@ Payload bytes for stroke points are 29-35% lower. Byte counts cover the JSON pay
 
 ### Tests and coverage
 
-`npm test` runs 264 tests (160 server, 104 client), and `npm run coverage` reports coverage:
+`npm test` runs 296 tests (160 server, 136 client), and `npm run coverage` reports coverage:
 
 | | Statements | Lines | Functions | Branches |
 |---|---|---|---|---|
 | Server | 83% | 84% | 89% | 80% |
-| Client | 99% | 99% | 99% | 84% |
+| Client | 99% | 99% | 99% | 83% |
 
-The server figure includes the integration tests that run against real PostgreSQL and Redis. The uncovered server code is mostly `index.js`, the startup and signal-handling entry point, which is checked by CI starting the real container instead. Client tests cover drawing, streamed updates from other users, note dragging and editing (including lock denials, rolled-back commits and lock renewal), clearing the board, undo and redo, and switching and sharing boards, touch drawing, drawing shapes, and exporting an image. Server tests also cover rate limiting. The one client file with no coverage is `socket.js`, which reads Vite's `import.meta` and can't be loaded under Jest. The component tests replace the Konva canvas with plain elements, so they check behavior rather than pixels.
+The server figure includes the integration tests that run against real PostgreSQL and Redis. The uncovered server code is mostly `index.js`, the startup and signal-handling entry point, which is checked by CI starting the real container instead. Client tests cover drawing, streamed updates from other users, note dragging and editing (including lock denials, rolled-back commits and lock renewal), clearing the board, undo and redo, and switching and sharing boards, touch drawing, drawing shapes, zooming and panning, and exporting an image. Server tests also cover rate limiting. The one client file with no coverage is `socket.js`, which reads Vite's `import.meta` and can't be loaded under Jest. The component tests replace the Konva canvas with plain elements, so they check behavior rather than pixels.
 
-The app is about 1,700 lines of source across 22 files, plus about 2,500 lines of tests.
+The app is about 1,800 lines of source across 23 files, plus about 2,850 lines of tests.
 
 ## Scaling across instances
 

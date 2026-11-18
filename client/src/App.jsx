@@ -13,6 +13,7 @@ export default function App() {
   const board = useRef(null);
   const [boardId, setBoardId] = useState(() => boardIdFromSearch(window.location.search));
   const [copied, setCopied] = useState(false);
+  const [zoom, setZoom] = useState(1);
 
   // The back and forward buttons move between boards too.
   useEffect(() => {
@@ -58,6 +59,10 @@ export default function App() {
         onShare={handleShare}
         onNewBoard={handleNewBoard}
         onExport={() => board.current?.exportPng()}
+        zoom={zoom}
+        onZoomIn={() => board.current?.zoomIn()}
+        onZoomOut={() => board.current?.zoomOut()}
+        onResetZoom={() => board.current?.resetView()}
         onClear={handleClear}
         onUndo={() => board.current?.undo()}
         onRedo={() => board.current?.redo()}
@@ -72,6 +77,7 @@ export default function App() {
         color={color}
         onNotePlaced={() => setTool('pen')}
         onHistoryChange={setHistory}
+        onZoomChange={setZoom}
       />
     </>
   );

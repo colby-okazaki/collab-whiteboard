@@ -85,3 +85,33 @@ test.each(['line', 'rect', 'ellipse'])('the %s tool can be picked', (name) => {
   fireEvent.click(screen.getByRole('button', { name }));
   expect(onToolChange).toHaveBeenCalledWith(name);
 });
+
+describe('zoom controls', () => {
+  const setup = (props) => {
+    const handlers = { onZoomIn: jest.fn(), onZoomOut: jest.fn(), onResetZoom: jest.fn() };
+    render(<Toolbar tool="pen" color="#000000" onToolChange={() => {}} onColorChange={() => {}} {...handlers} {...props} />);
+    return handlers;
+  };
+
+  test('show the zoom level as a percentage', () => {
+    setup({ zoom: 1.25 });
+    expect(screen.getByRole('button', { name: 'reset zoom' })).toHaveTextContent('125%');
+  });
+
+  test('call their handlers', () => {
+    const { onZoomIn, onZoomOut, onResetZoom } = setup();
+    fireEvent.click(screen.getByRole('button', { name: 'zoom in' }));
+    fireEvent.click(screen.getByRole('button', { name: 'zoom out' }));
+    fireEvent.click(screen.getByRole('button', { name: 'reset zoom' }));
+    expect(onZoomIn).toHaveBeenCalledTimes(1);
+    expect(onZoomOut).toHaveBeenCalledTimes(1);
+    expect(onResetZoom).toHaveBeenCalledTimes(1);
+  });
+
+  test('the hand tool can be picked', () => {
+    const onToolChange = jest.fn();
+    render(<Toolbar tool="pen" color="#000000" onToolChange={onToolChange} onColorChange={() => {}} />);
+    fireEvent.click(screen.getByRole('button', { name: 'hand' }));
+    expect(onToolChange).toHaveBeenCalledWith('hand');
+  });
+});

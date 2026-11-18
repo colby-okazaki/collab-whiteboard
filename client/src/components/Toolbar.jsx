@@ -1,4 +1,4 @@
-const TOOLS = ['pen', 'eraser', 'line', 'rect', 'ellipse', 'note'];
+const TOOLS = ['pen', 'eraser', 'line', 'rect', 'ellipse', 'note', 'hand'];
 
 export default function Toolbar({
   tool,
@@ -11,6 +11,10 @@ export default function Toolbar({
   onShare,
   onNewBoard,
   onExport,
+  zoom = 1,
+  onZoomIn,
+  onZoomOut,
+  onResetZoom,
   onUndo,
   onRedo,
   canUndo = false,
@@ -35,6 +39,17 @@ export default function Toolbar({
       <button onClick={onRedo} disabled={!canRedo} title="Redo (Shift+Cmd/Ctrl+Z)">
         redo
       </button>
+      <span className="zoom" role="group" aria-label="Zoom">
+        <button onClick={onZoomOut} aria-label="zoom out">
+          −
+        </button>
+        <button onClick={onResetZoom} aria-label="reset zoom" title="Back to 100%">
+          {Math.round(zoom * 100)}%
+        </button>
+        <button onClick={onZoomIn} aria-label="zoom in">
+          +
+        </button>
+      </span>
       <span className="board-name" title="Board name">
         {boardId}
       </span>

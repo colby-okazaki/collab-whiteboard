@@ -7,12 +7,12 @@ jest.mock('../socket', () => ({ socket: { emit: jest.fn() } }));
 
 // Konva needs a real canvas, so stand in a Board that just reports the
 // active tool and lets the test place a note.
-const mockBoardActions = { undo: jest.fn(), redo: jest.fn(), exportPng: jest.fn() };
+const mockBoardActions = { undo: jest.fn(), redo: jest.fn(), exportPng: jest.fn(), zoomIn: jest.fn(), zoomOut: jest.fn(), resetView: jest.fn() };
 jest.mock('../components/Board', () => {
   const { forwardRef, useImperativeHandle } = require('react');
   return {
     __esModule: true,
-    default: forwardRef(({ boardId, tool, onNotePlaced, onHistoryChange }, ref) => {
+    default: forwardRef(({ boardId, tool, onNotePlaced, onHistoryChange, onZoomChange }, ref) => {
       useImperativeHandle(ref, () => mockBoardActions);
       return (
         <>
@@ -20,6 +20,7 @@ jest.mock('../components/Board', () => {
           <span data-testid="board">{boardId}</span>
           <button onClick={onNotePlaced}>place note</button>
           <button onClick={() => onHistoryChange({ canUndo: true, canRedo: false })}>draw something</button>
+          <button onClick={() => onZoomChange(2)}>zoom board</button>
         </>
       );
     }),
@@ -146,4 +147,20 @@ test('export png asks the board to save itself as an image', () => {
   render(<App />);
   fireEvent.click(screen.getByRole('button', { name: 'export png' }));
   expect(mockBoardActions.exportPng).toHaveBeenCalledTimes(1);
+});
+
+describe('zoom', () => {
+  test('shows the level the board reports and sends the buttons to it', () => {
+    render(<App />);
+    expect(screen.getByRole('button', { name: 'reset zoom' })).toHaveTextContent('100%');
+    fireEvent.click(screen.getByText('zoom board'));
+    expect(screen.getByRole('button', { name: 'reset zoom' })).toHaveTextContent('200%');
+
+    fireEvent.click(screen.getByRole('button', { name: 'zoom in' }));
+    fireEvent.click(screen.getByRole('button', { name: 'zoom out' }));
+    fireEvent.click(screen.getByRole('button', { name: 'reset zoom' }));
+    expect(mockBoardActions.zoomIn).toHaveBeenCalledTimes(1);
+    expect(mockBoardActions.zoomOut).toHaveBeenCalledTimes(1);
+    expect(mockBoardActions.resetView).toHaveBeenCalledTimes(1);
+  });
 });

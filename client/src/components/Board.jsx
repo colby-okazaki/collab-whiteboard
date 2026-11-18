@@ -6,6 +6,7 @@ import { throttle } from '../utils/throttle';
 import { createBatcher } from '../utils/batcher';
 import { useWindowSize } from '../hooks/useWindowSize';
 import { exportBoardPng } from '../utils/exportBoard';
+import { INITIAL_VIEW, boardToScreen, panBy, wheelFactor, zoomAt } from '../utils/view';
 import Cursors from './Cursors';
 import StickyNote, { NOTE_WIDTH, NOTE_HEIGHT } from './StickyNote';
 import StrokeShape from './StrokeShape';
@@ -25,13 +26,16 @@ const SHAPE_TOOLS = new Set(['line', 'rect', 'ellipse']);
 // Ignore a shape dragged less than this far, so a plain click leaves no speck.
 const MIN_SHAPE_SIZE = 3;
 
-const Board = forwardRef(function Board({ boardId, tool, color, onNotePlaced, onHistoryChange }, ref) {
+const Board = forwardRef(function Board({ boardId, tool, color, onNotePlaced, onHistoryChange, onZoomChange }, ref) {
   const { width, height } = useWindowSize();
   const [strokes, setStrokes] = useState([]);
   const [cursors, setCursors] = useState({});
   const [notes, setNotes] = useState({});
   const [editingId, setEditingId] = useState(null);
   const drawing = useRef(null);
+  // What part of the board is on screen, and how big it is.
+  const [view, setView] = useState(INITIAL_VIEW);
+  const panStart = useRef(null);
   // The shape being dragged out, shown only to you until you let go.
   const shapeDraft = useRef(null);
   const [draft, setDraft] = useState(null);
@@ -44,6 +48,10 @@ const Board = forwardRef(function Board({ boardId, tool, color, onNotePlaced, on
   const cursorLayerRef = useRef(null);
   const strokesRef = useRef(strokes);
   strokesRef.current = strokes;
+
+  useEffect(() => {
+    onZoomChange?.(view.scale);
+  }, [view.scale, onZoomChange]);
 
   const reportHistory = () =>
     onHistoryChange?.({ canUndo: undoStack.current.length > 0, canRedo: redoStack.current.length > 0 });
@@ -123,7 +131,15 @@ const Board = forwardRef(function Board({ boardId, tool, color, onNotePlaced, on
     // Clicks on a note are for dragging/editing it, not drawing over it.
     if (e.target.findAncestor('.note', true)) return;
     if (Date.now() - notePlacedAt.current < NOTE_PLACED_GRACE_MS) return;
-    const { x, y } = e.target.getStage().getPointerPosition();
+    const stage = e.target.getStage();
+    if (tool === 'hand') {
+      const screen = stage.getPointerPosition();
+      panStart.current = { pointer: screen, view };
+      return;
+    }
+    // Positions are in board coordinates, so they mean the same thing to
+    // everyone however far each of them has zoomed or panned.
+    const { x, y } = stage.getRelativePointerPosition();
     if (tool === 'note') {
       socket.emit('note:add', {
         id: crypto.randomUUID(),
@@ -149,7 +165,14 @@ const Board = forwardRef(function Board({ boardId, tool, color, onNotePlaced, on
   };
 
   const handleMouseMove = (e) => {
-    const { x, y } = e.target.getStage().getPointerPosition();
+    const stage = e.target.getStage();
+    if (panStart.current) {
+      const screen = stage.getPointerPosition();
+      const { pointer, view: start } = panStart.current;
+      setView(panBy(start, screen.x - pointer.x, screen.y - pointer.y));
+      return;
+    }
+    const { x, y } = stage.getRelativePointerPosition();
     sendCursor(x, y);
     if (shapeDraft.current) {
       const [x1, y1] = shapeDraft.current.points;
@@ -185,6 +208,7 @@ const Board = forwardRef(function Board({ boardId, tool, color, onNotePlaced, on
   };
 
   const handleMouseUp = () => {
+    panStart.current = null;
     if (shapeDraft.current) return finishShape();
     if (!drawing.current) return;
     pointBatcher.flush();
@@ -222,10 +246,34 @@ const Board = forwardRef(function Board({ boardId, tool, color, onNotePlaced, on
     reportHistory();
   };
 
+  // Ctrl/Cmd+wheel (also a trackpad pinch) zooms around the pointer; a plain
+  // wheel or two-finger scroll pans.
+  const handleWheel = (e) => {
+    e.evt.preventDefault();
+    const pointer = e.target.getStage().getPointerPosition();
+    if (e.evt.ctrlKey || e.evt.metaKey) {
+      setView((v) => zoomAt(v, v.scale * wheelFactor(e.evt.deltaY), pointer));
+    } else {
+      setView((v) => panBy(v, -e.evt.deltaX, -e.evt.deltaY));
+    }
+  };
+
+  // The buttons zoom around the middle of the window.
+  const zoomBy = (factor) => setView((v) => zoomAt(v, v.scale * factor, { x: width / 2, y: height / 2 }));
+  const resetView = () => setView(INITIAL_VIEW);
+
+  // A grab cursor while the hand tool is active.
+  useEffect(() => {
+    document.body.style.cursor = tool === 'hand' ? 'grab' : '';
+    return () => {
+      document.body.style.cursor = '';
+    };
+  }, [tool]);
+
   const exportPng = () =>
     exportBoardPng({ stage: stageRef.current, cursorLayer: cursorLayerRef.current, boardId });
 
-  useImperativeHandle(ref, () => ({ undo, redo, exportPng }));
+  useImperativeHandle(ref, () => ({ undo, redo, exportPng, zoomIn: () => zoomBy(1.25), zoomOut: () => zoomBy(0.8), resetView }));
 
   // Cmd/Ctrl+Z undoes, Shift+Cmd/Ctrl+Z or Ctrl+Y redoes. Typing in a note
   // keeps the browser's own text undo.
@@ -308,6 +356,11 @@ const Board = forwardRef(function Board({ boardId, tool, color, onNotePlaced, on
         ref={stageRef}
         width={width}
         height={height}
+        x={view.x}
+        y={view.y}
+        scaleX={view.scale}
+        scaleY={view.scale}
+        onWheel={handleWheel}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
@@ -317,7 +370,7 @@ const Board = forwardRef(function Board({ boardId, tool, color, onNotePlaced, on
       >
         {/* Paper colour, so exported images are not transparent. */}
         <Layer listening={false}>
-          <Rect width={width} height={height} fill="#fafafa" />
+          <Rect x={-view.x / view.scale} y={-view.y / view.scale} width={width / view.scale} height={height / view.scale} fill="#fafafa" />
         </Layer>
         <Layer>
           {strokes.map((s) => (
@@ -348,7 +401,14 @@ const Board = forwardRef(function Board({ boardId, tool, color, onNotePlaced, on
           aria-label="Note text"
           autoFocus
           defaultValue={editingNote.text}
-          style={{ left: editingNote.x, top: editingNote.y, width: NOTE_WIDTH, height: NOTE_HEIGHT }}
+          style={{
+            left: boardToScreen(view, editingNote).x,
+            top: boardToScreen(view, editingNote).y,
+            width: NOTE_WIDTH,
+            height: NOTE_HEIGHT,
+            transform: `scale(${view.scale})`,
+            transformOrigin: 'top left',
+          }}
           onBlur={finishEditing}
           onKeyDown={(e) => {
             if (e.key === 'Escape') {
