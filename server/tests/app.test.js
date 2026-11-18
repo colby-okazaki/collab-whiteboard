@@ -449,6 +449,89 @@ describe('rate limiting', () => {
   });
 });
 
+describe('who is who', () => {
+  const { io: connect } = require('socket.io-client');
+  const { PALETTE } = require('../src/colors');
+  let running;
+  const clients = [];
+  afterEach(async () => {
+    clients.splice(0).forEach((c) => c.disconnect());
+    await new Promise((resolve) => running.io.close(resolve));
+  });
+
+  async function open() {
+    running = await start();
+  }
+  // Joins a board and resolves with the socket and the color the server gave it.
+  async function join(boardId) {
+    const socket = connect(running.url, { transports: ['websocket'] });
+    clients.push(socket);
+    const you = new Promise((resolve) => socket.once('board:you', resolve));
+    await new Promise((resolve) => {
+      socket.once('board:snapshot', resolve);
+      socket.emit('board:join', boardId);
+    });
+    return Object.assign(socket, { you: await you });
+  }
+  const next = (socket, event) => new Promise((resolve) => socket.once(event, resolve));
+  const settle = () => new Promise((r) => setTimeout(r, 100));
+
+  test('everyone on a board gets a different color, and is told their own', async () => {
+    await open();
+    const people = [];
+    for (let i = 0; i < 5; i++) people.push(await join('who-1'));
+    const colors = people.map((p) => p.you.color);
+    expect(new Set(colors).size).toBe(5);
+    expect(colors).toEqual(PALETTE.slice(0, 5));
+    people.forEach((p) => expect(p.you.id).toBe(p.id));
+  });
+
+  test('colors stay different past the size of the palette', async () => {
+    await open();
+    const people = [];
+    for (let i = 0; i < PALETTE.length + 4; i++) people.push(await join('who-2'));
+    expect(new Set(people.map((p) => p.you.color)).size).toBe(PALETTE.length + 4);
+  });
+
+  test('boards are separate, so each starts with the first color', async () => {
+    await open();
+    expect((await join('who-3a')).you.color).toBe(PALETTE[0]);
+    expect((await join('who-3b')).you.color).toBe(PALETTE[0]);
+  });
+
+  test('a color is free again once its owner leaves', async () => {
+    await open();
+    const first = await join('who-4');
+    await join('who-4');
+    first.disconnect();
+    await settle();
+    expect((await join('who-4')).you.color).toBe(PALETTE[0]);
+  });
+
+  test("others see your cursor in the color the server gave you, whatever you claim", async () => {
+    await open();
+    const alice = await join('who-5');
+    const bob = await join('who-5');
+    const seen = next(bob, 'cursor:move');
+    alice.emit('cursor:move', { x: 5, y: 6, name: 'Alice', color: '#000000' });
+    expect(await seen).toEqual({ id: alice.id, x: 5, y: 6, name: 'Alice', color: alice.you.color });
+  });
+
+  test('a note you are editing shows your assigned color, not one you made up', async () => {
+    await open();
+    const alice = await join('who-6');
+    const bob = await join('who-6');
+    // Wait until Bob has seen the note appear, so the next update he gets is the lock.
+    const added = next(bob, 'note:upsert');
+    alice.emit('note:add', { id: 'n1', x: 1, y: 2, color: '#fff59d' });
+    await added;
+    const locked = next(bob, 'note:upsert');
+    const res = await new Promise((resolve) => alice.emit('note:lock', { id: 'n1', name: 'Alice', color: '#123456' }, resolve));
+    expect(res.note.lockedBy).toMatchObject({ name: 'Alice', color: alice.you.color });
+    expect((await locked).lockedBy.color).toBe(alice.you.color);
+  });
+});
+
 describe('shutting down', () => {
   const { io: connect } = require('socket.io-client');
 

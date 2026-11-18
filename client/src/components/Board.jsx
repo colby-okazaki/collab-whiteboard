@@ -6,6 +6,7 @@ import { throttle } from '../utils/throttle';
 import { createBatcher } from '../utils/batcher';
 import { useWindowSize } from '../hooks/useWindowSize';
 import { exportBoardPng } from '../utils/exportBoard';
+import { ringCursor } from '../utils/ringCursor';
 import { INITIAL_VIEW, boardToScreen, panBy, wheelFactor, zoomAt } from '../utils/view';
 import Cursors from './Cursors';
 import StickyNote, { NOTE_WIDTH, NOTE_HEIGHT } from './StickyNote';
@@ -36,6 +37,8 @@ const Board = forwardRef(function Board({ boardId, tool, color, onNotePlaced, on
   // What part of the board is on screen, and how big it is.
   const [view, setView] = useState(INITIAL_VIEW);
   const panStart = useRef(null);
+  // The color the server gave you, shown around your cursor and everyone else's view of it.
+  const [myColor, setMyColor] = useState(null);
   // The shape being dragged out, shown only to you until you let go.
   const shapeDraft = useRef(null);
   const [draft, setDraft] = useState(null);
@@ -80,6 +83,7 @@ const Board = forwardRef(function Board({ boardId, tool, color, onNotePlaced, on
   useEffect(() => {
     socket.connect();
     socket.emit('board:join', boardId);
+    socket.on('board:you', ({ color: assigned }) => setMyColor(assigned));
     socket.on('board:snapshot', (snap) => {
       setStrokes(snap.strokes);
       setNotes(snap.notes);
@@ -114,6 +118,7 @@ const Board = forwardRef(function Board({ boardId, tool, color, onNotePlaced, on
       sendCursor.cancel();
       pointBatcher.cancel();
       sendNoteMove.cancel();
+      socket.off('board:you');
       socket.off('board:snapshot');
       socket.off('board:cleared');
       socket.off('stroke:removed');
@@ -262,13 +267,14 @@ const Board = forwardRef(function Board({ boardId, tool, color, onNotePlaced, on
   const zoomBy = (factor) => setView((v) => zoomAt(v, v.scale * factor, { x: width / 2, y: height / 2 }));
   const resetView = () => setView(INITIAL_VIEW);
 
-  // A grab cursor while the hand tool is active.
+  // Your pointer is a ring in your color while drawing, and a hand for panning.
   useEffect(() => {
-    document.body.style.cursor = tool === 'hand' ? 'grab' : '';
+    if (tool === 'hand') document.body.style.cursor = 'grab';
+    else document.body.style.cursor = myColor ? ringCursor(myColor) : '';
     return () => {
       document.body.style.cursor = '';
     };
-  }, [tool]);
+  }, [tool, myColor]);
 
   const exportPng = () =>
     exportBoardPng({ stage: stageRef.current, cursorLayer: cursorLayerRef.current, boardId });
@@ -392,7 +398,7 @@ const Board = forwardRef(function Board({ boardId, tool, color, onNotePlaced, on
           ))}
         </Layer>
         <Layer ref={cursorLayerRef} listening={false}>
-          <Cursors cursors={cursors} />
+          <Cursors cursors={cursors} scale={view.scale} />
         </Layer>
       </Stage>
       {editingNote && (

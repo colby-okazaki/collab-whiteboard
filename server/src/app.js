@@ -4,6 +4,7 @@ const cors = require('cors');
 const { Server } = require('socket.io');
 const validate = require('./validate');
 const { createRateLimiter } = require('./rateLimit');
+const { pickColor } = require('./colors');
 
 // Per connection. Real use peaks around 50 messages a second.
 const DEFAULT_RATE_LIMIT = { capacity: 200, perSecond: 100 };
@@ -95,8 +96,15 @@ function createApp({ store, db, clientOrigin, adapter, staticDir, rateLimit = DE
         socket.emit('board:error', 'Could not load board');
         return;
       }
+      // Everyone on a board gets a different color, chosen by the server so
+      // two people can't pick the same one. The color is not taken from the
+      // client, so nobody can pose as someone else.
+      const others = await io.in(boardId).fetchSockets();
+      const taken = new Set(others.filter((s) => s.id !== socket.id).map((s) => s.data.color));
+      socket.data.color = pickColor(taken);
       socket.join(boardId);
       socket.data.boardId = boardId;
+      socket.emit('board:you', { id: socket.id, color: socket.data.color });
       // Late joiners get the current board, not just future updates.
       socket.emit('board:snapshot', await store.snapshot(boardId));
     });
@@ -151,10 +159,10 @@ function createApp({ store, db, clientOrigin, adapter, staticDir, rateLimit = DE
     });
 
     // Cursors are ephemeral: relayed to the room, never stored.
-    on('cursor:move', validate.cursor, ({ x, y, name, color }) => {
+    on('cursor:move', validate.cursor, ({ x, y, name }) => {
       const boardId = boardOf();
       if (!boardId) return;
-      socket.to(boardId).emit('cursor:move', { id: socket.id, x, y, name, color });
+      socket.to(boardId).emit('cursor:move', { id: socket.id, x, y, name, color: socket.data.color });
     });
 
     // Sticky notes. Writes are acknowledged so the client can roll back
@@ -169,10 +177,10 @@ function createApp({ store, db, clientOrigin, adapter, staticDir, rateLimit = DE
     });
 
     // Also used by the client to refresh its lock while editing.
-    on('note:lock', validate.noteLock, async ({ id, name, color }, ack) => {
+    on('note:lock', validate.noteLock, async ({ id, name }, ack) => {
       const boardId = boardOf();
       if (!boardId) return;
-      const res = await store.lockNote(boardId, id, { id: socket.id, name, color });
+      const res = await store.lockNote(boardId, id, { id: socket.id, name, color: socket.data.color });
       if (res.ok) io.to(boardId).emit('note:upsert', res.note);
       reply(ack, res);
     });

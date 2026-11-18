@@ -88,6 +88,7 @@ client/   Vite + React + react-konva frontend
 - [x] Live stroke streaming (points batched every 40ms)
 - [x] Sticky notes (add, edit, move)
 - [x] Live cursors (throttled to 50ms)
+- [x] No login: anyone can join, and each person gets their own color
 - [x] Conflict resolution for concurrent edits/moves (locks + versioning)
 - [x] PostgreSQL persistence for board state
 - [x] Clear board, with a confirmation, wiping the board for every user
@@ -118,11 +119,15 @@ Locks and cursors are never stored; they only make sense while users are connect
 
 ### Boards and sharing
 
-The board comes from the address: `?board=team-sync` opens that board, and no parameter opens `default`. **new board** switches to a fresh random board and updates the address, so the back button returns to the previous one, and **share** copies the link (or shows it to copy by hand if the browser blocks clipboard access). Names follow the server's rules (letters, digits, `-` and `_`, up to 64 characters); anything else falls back to the default board. Each board has its own strokes, notes, locks and history, and anyone with the link can edit it, since there are no accounts yet.
+The board comes from the address: `?board=team-sync` opens that board, and no parameter opens `default`. **new board** switches to a fresh random board and updates the address, so the back button returns to the previous one, and **share** copies the link (or shows it to copy by hand if the browser blocks clipboard access). Names follow the server's rules (letters, digits, `-` and `_`, up to 64 characters); anything else falls back to the default board. Each board has its own strokes, notes, locks and history, and anyone with the link can edit it, because there is deliberately no login.
 
 ### Shapes
 
 The **line**, **rect** and **ellipse** tools draw a shape by dragging from one corner (or end) to the other, in any direction. You see it as you drag, but nothing is sent until you let go, and then the finished shape goes to the server in one message (two points, `[x1, y1, x2, y2]`) instead of being streamed like a pen stroke. A shape is stored as a stroke, so undo and redo, saving to PostgreSQL, sharing with other users, and exporting all work the same way. The server checks that a shape has exactly two points and that a streamed stroke can't claim to be a shape. A drag shorter than 3 pixels is ignored, so a plain click leaves nothing behind.
+
+### Guests and colors
+
+There is no login: anyone who opens a link is in. Each browser gets a guest name (`Guest 482`), kept across refreshes. Each person on a board gets their own color, chosen by the server when they join: the first of 12 distinct colors that nobody there is using, and then colors spread around the colour wheel if a board has more people than that. A color is free again when its owner leaves. Because the server decides, two people can't end up with the same color, and a client can't claim someone else's (the color a client sends is ignored). The color shows as a ring with a name tag around that person's cursor on everyone else's screen, stays the same size however far you zoom, and is the color of the border and label when they are editing a note. Your own mouse pointer is a ring in your color too, so you can see what others see.
 
 ### Zoom and pan
 
@@ -200,16 +205,16 @@ Payload bytes for stroke points are 29-35% lower. Byte counts cover the JSON pay
 
 ### Tests and coverage
 
-`npm test` runs 296 tests (160 server, 136 client), and `npm run coverage` reports coverage:
+`npm test` runs 338 tests (177 server, 161 client), and `npm run coverage` reports coverage:
 
 | | Statements | Lines | Functions | Branches |
 |---|---|---|---|---|
-| Server | 83% | 84% | 89% | 80% |
+| Server | 85% | 85% | 90% | 81% |
 | Client | 99% | 99% | 99% | 83% |
 
-The server figure includes the integration tests that run against real PostgreSQL and Redis. The uncovered server code is mostly `index.js`, the startup and signal-handling entry point, which is checked by CI starting the real container instead. Client tests cover drawing, streamed updates from other users, note dragging and editing (including lock denials, rolled-back commits and lock renewal), clearing the board, undo and redo, and switching and sharing boards, touch drawing, drawing shapes, zooming and panning, and exporting an image. Server tests also cover rate limiting. The one client file with no coverage is `socket.js`, which reads Vite's `import.meta` and can't be loaded under Jest. The component tests replace the Konva canvas with plain elements, so they check behavior rather than pixels.
+The server figure includes the integration tests that run against real PostgreSQL and Redis. The uncovered server code is mostly `index.js`, the startup and signal-handling entry point, which is checked by CI starting the real container instead. Client tests cover drawing, streamed updates from other users, note dragging and editing (including lock denials, rolled-back commits and lock renewal), clearing the board, undo and redo, and switching and sharing boards, touch drawing, drawing shapes, zooming and panning, cursor colors, and exporting an image. Server tests also cover rate limiting. The one client file with no coverage is `socket.js`, which reads Vite's `import.meta` and can't be loaded under Jest. The component tests replace the Konva canvas with plain elements, so they check behavior rather than pixels.
 
-The app is about 1,800 lines of source across 23 files, plus about 2,850 lines of tests.
+The app is about 1,900 lines of source across 25 files, plus about 3,200 lines of tests.
 
 ## Scaling across instances
 
