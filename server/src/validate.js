@@ -10,7 +10,9 @@ const MAX_COORD = 100_000;
 
 const ID_PATTERN = /^[A-Za-z0-9_-]+$/;
 const COLOR_PATTERN = /^#[0-9a-fA-F]{3,8}$/;
-const TOOLS = new Set(['pen', 'eraser']);
+const FREEHAND_TOOLS = new Set(['pen', 'eraser']);
+// A shape is its two corners (or end points), [x1, y1, x2, y2].
+const SHAPE_TOOLS = new Set(['line', 'rect', 'ellipse']);
 
 const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const isId = (v) => typeof v === 'string' && v.length <= MAX_ID_LENGTH && ID_PATTERN.test(v);
@@ -30,15 +32,20 @@ function boardId(v) {
 }
 
 function strokeStart(p) {
-  if (!isObject(p) || !isId(p.id) || !TOOLS.has(p.tool) || !isColor(p.color)) return null;
+  if (!isObject(p) || !isId(p.id) || !FREEHAND_TOOLS.has(p.tool) || !isColor(p.color)) return null;
   if (!isPointList(p.points, MAX_POINTS_PER_MESSAGE)) return null;
   return { id: p.id, tool: p.tool, color: p.color, points: p.points };
 }
 
-// A finished stroke sent back in one piece (redo), so it may be longer than a batch.
+// A finished stroke or shape sent in one piece: a redo, or a shape the user
+// just drew. A freehand stroke may be longer than a batch; a shape is exactly
+// two points.
 function strokeRestore(p) {
-  if (!isObject(p) || !isId(p.id) || !TOOLS.has(p.tool) || !isColor(p.color)) return null;
-  if (!isPointList(p.points, MAX_POINTS_PER_STROKE)) return null;
+  if (!isObject(p) || !isId(p.id) || !isColor(p.color)) return null;
+  const isShape = SHAPE_TOOLS.has(p.tool);
+  if (!isShape && !FREEHAND_TOOLS.has(p.tool)) return null;
+  if (!isPointList(p.points, isShape ? 4 : MAX_POINTS_PER_STROKE)) return null;
+  if (isShape && p.points.length !== 4) return null;
   return { id: p.id, tool: p.tool, color: p.color, points: p.points };
 }
 

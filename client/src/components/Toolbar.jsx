@@ -1,4 +1,4 @@
-const TOOLS = ['pen', 'eraser', 'note'];
+const TOOLS = ['pen', 'eraser', 'line', 'rect', 'ellipse', 'note'];
 
 export default function Toolbar({
   tool,

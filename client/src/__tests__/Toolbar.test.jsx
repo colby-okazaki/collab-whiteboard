@@ -78,3 +78,10 @@ test('export png calls onExport', () => {
   fireEvent.click(screen.getByRole('button', { name: 'export png' }));
   expect(onExport).toHaveBeenCalledTimes(1);
 });
+
+test.each(['line', 'rect', 'ellipse'])('the %s tool can be picked', (name) => {
+  const onToolChange = jest.fn();
+  render(<Toolbar tool="pen" color="#000000" onToolChange={onToolChange} onColorChange={() => {}} />);
+  fireEvent.click(screen.getByRole('button', { name }));
+  expect(onToolChange).toHaveBeenCalledWith(name);
+});

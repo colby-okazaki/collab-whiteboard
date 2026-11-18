@@ -1,5 +1,5 @@
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
-import { Stage, Layer, Line, Rect } from 'react-konva';
+import { Stage, Layer, Rect } from 'react-konva';
 import { socket } from '../socket';
 import { me } from '../identity';
 import { throttle } from '../utils/throttle';
@@ -8,6 +8,7 @@ import { useWindowSize } from '../hooks/useWindowSize';
 import { exportBoardPng } from '../utils/exportBoard';
 import Cursors from './Cursors';
 import StickyNote, { NOTE_WIDTH, NOTE_HEIGHT } from './StickyNote';
+import StrokeShape from './StrokeShape';
 
 const CURSOR_THROTTLE_MS = 50;
 const STROKE_BATCH_MS = 40;
@@ -19,6 +20,10 @@ const LOCK_REFRESH_MS = 20_000;
 const NOTE_PLACED_GRACE_MS = 400;
 // How many of your own strokes undo can step back through.
 const MAX_HISTORY = 50;
+// Shapes are sent whole when the mouse is released, not streamed like pen strokes.
+const SHAPE_TOOLS = new Set(['line', 'rect', 'ellipse']);
+// Ignore a shape dragged less than this far, so a plain click leaves no speck.
+const MIN_SHAPE_SIZE = 3;
 
 const Board = forwardRef(function Board({ boardId, tool, color, onNotePlaced, onHistoryChange }, ref) {
   const { width, height } = useWindowSize();
@@ -27,6 +32,9 @@ const Board = forwardRef(function Board({ boardId, tool, color, onNotePlaced, on
   const [notes, setNotes] = useState({});
   const [editingId, setEditingId] = useState(null);
   const drawing = useRef(null);
+  // The shape being dragged out, shown only to you until you let go.
+  const shapeDraft = useRef(null);
+  const [draft, setDraft] = useState(null);
   const editCancelled = useRef(false);
   const notePlacedAt = useRef(0);
   // Your own finished strokes, newest last, for undo and redo.
@@ -71,6 +79,8 @@ const Board = forwardRef(function Board({ boardId, tool, color, onNotePlaced, on
     socket.on('board:cleared', () => {
       // Drop anything half-finished locally too, so it can't reappear.
       drawing.current = null;
+      shapeDraft.current = null;
+      setDraft(null);
       pointBatcher.cancel();
       setStrokes([]);
       setNotes({});
@@ -128,6 +138,11 @@ const Board = forwardRef(function Board({ boardId, tool, color, onNotePlaced, on
       onNotePlaced?.();
       return;
     }
+    if (SHAPE_TOOLS.has(tool)) {
+      shapeDraft.current = { id: crypto.randomUUID(), tool, color, points: [x, y, x, y] };
+      setDraft(shapeDraft.current);
+      return;
+    }
     drawing.current = { id: crypto.randomUUID(), tool, color, points: [x, y] };
     socket.emit('stroke:start', drawing.current);
     setStrokes((s) => [...s, drawing.current]);
@@ -136,6 +151,12 @@ const Board = forwardRef(function Board({ boardId, tool, color, onNotePlaced, on
   const handleMouseMove = (e) => {
     const { x, y } = e.target.getStage().getPointerPosition();
     sendCursor(x, y);
+    if (shapeDraft.current) {
+      const [x1, y1] = shapeDraft.current.points;
+      shapeDraft.current = { ...shapeDraft.current, points: [x1, y1, x, y] };
+      setDraft(shapeDraft.current);
+      return;
+    }
     if (!drawing.current) return;
     drawing.current = { ...drawing.current, points: [...drawing.current.points, x, y] };
     pointBatcher.push(x, y);
@@ -150,7 +171,21 @@ const Board = forwardRef(function Board({ boardId, tool, color, onNotePlaced, on
     handler(e);
   };
 
+  const finishShape = () => {
+    const shape = shapeDraft.current;
+    shapeDraft.current = null;
+    setDraft(null);
+    const [x1, y1, x2, y2] = shape.points;
+    if (Math.hypot(x2 - x1, y2 - y1) < MIN_SHAPE_SIZE) return;
+    socket.emit('stroke:restore', shape);
+    setStrokes((s) => [...s, shape]);
+    undoStack.current = [...undoStack.current, shape.id].slice(-MAX_HISTORY);
+    redoStack.current = [];
+    reportHistory();
+  };
+
   const handleMouseUp = () => {
+    if (shapeDraft.current) return finishShape();
     if (!drawing.current) return;
     pointBatcher.flush();
     socket.emit('stroke:end', { id: drawing.current.id });
@@ -286,17 +321,9 @@ const Board = forwardRef(function Board({ boardId, tool, color, onNotePlaced, on
         </Layer>
         <Layer>
           {strokes.map((s) => (
-            <Line
-              key={s.id}
-              points={s.points}
-              stroke={s.color}
-              strokeWidth={s.tool === 'eraser' ? 20 : 3}
-              lineCap="round"
-              lineJoin="round"
-              tension={0.5}
-              globalCompositeOperation={s.tool === 'eraser' ? 'destination-out' : 'source-over'}
-            />
+            <StrokeShape key={s.id} stroke={s} />
           ))}
+          {draft && <StrokeShape stroke={draft} />}
         </Layer>
         <Layer>
           {Object.values(notes).map((note) => (

@@ -314,6 +314,31 @@ describe('undo and redo', () => {
     expect(strokes[0].points).toEqual([0, 0, 5, 5]);
   });
 
+  test('a shape is shown to everyone, saved, and can be undone like a stroke', async () => {
+    await open();
+    const alice = await join('undo-7');
+    const bob = await join('undo-7');
+    const shown = next(bob, 'stroke:start');
+    alice.emit('stroke:restore', { id: 'r1', tool: 'rect', color: '#2563eb', points: [10, 20, 110, 90] });
+    expect(await shown).toEqual({ id: 'r1', tool: 'rect', color: '#2563eb', points: [10, 20, 110, 90] });
+    await settle();
+    expect((await join('undo-7')).snapshot.strokes).toEqual([
+      { id: 'r1', tool: 'rect', color: '#2563eb', points: [10, 20, 110, 90] },
+    ]);
+
+    alice.emit('stroke:undo', { id: 'r1' });
+    await next(bob, 'stroke:removed');
+    expect(await strokeIds('undo-7')).toEqual([]);
+  });
+
+  test('a malformed shape never reaches the board', async () => {
+    await open();
+    const alice = await join('undo-8');
+    alice.emit('stroke:restore', { id: 'bad', tool: 'rect', color: '#2563eb', points: [1, 2, 3] });
+    await settle();
+    expect(await strokeIds('undo-8')).toEqual([]);
+  });
+
   test('a restored stroke can be undone again', async () => {
     await open();
     const alice = await join('undo-6');

@@ -129,7 +129,8 @@ function createApp({ store, db, clientOrigin, adapter, staticDir, rateLimit = DE
       if (boardId) await saveStroke(boardId, id);
     });
 
-    // Undo removes a stroke for everyone; redo puts the whole stroke back.
+    // Undo removes a stroke for everyone. Redo puts the whole stroke back, and
+    // shapes arrive the same way: finished, in one message.
     on('stroke:undo', validate.strokeId, async ({ id }) => {
       const boardId = boardOf();
       if (!boardId || !socket.data.ownStrokes.has(id)) return;

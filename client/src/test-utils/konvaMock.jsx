@@ -46,6 +46,7 @@ export function createKonvaMock() {
     Line: el('line'),
     Group: el('group'),
     Rect: el('rect'),
+    Ellipse: el('ellipse'),
     Circle: el('circle'),
     Text: el('text'),
   };

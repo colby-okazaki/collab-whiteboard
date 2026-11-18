@@ -73,6 +73,33 @@ describe('strokeRestore', () => {
   });
 });
 
+describe('shapes', () => {
+  const shape = { id: 's1', tool: 'rect', color: '#222222', points: [10, 20, 110, 90] };
+
+  test.each(['line', 'rect', 'ellipse'])('a %s is accepted as a finished stroke', (tool) => {
+    expect(validate.strokeRestore({ ...shape, tool })).toEqual({ ...shape, tool });
+  });
+
+  test.each([
+    ['one point only', { points: [1, 2] }],
+    ['three points', { points: [1, 2, 3, 4, 5, 6] }],
+    ['an odd number of coordinates', { points: [1, 2, 3] }],
+    ['a huge coordinate', { points: [1, 2, 3, 1e9] }],
+    ['a non-numeric coordinate', { points: [1, 2, 3, 'x'] }],
+  ])('a shape with %s is rejected', (_label, override) => {
+    expect(validate.strokeRestore({ ...shape, ...override })).toBeNull();
+  });
+
+  test('a shape cannot be started as a streamed stroke', () => {
+    expect(validate.strokeStart({ ...shape })).toBeNull();
+  });
+
+  test('freehand strokes can still be longer than four points', () => {
+    const points = new Array(100).fill(4);
+    expect(validate.strokeRestore({ id: 's1', tool: 'pen', color: '#222222', points })).toMatchObject({ points });
+  });
+});
+
 describe('strokePoints', () => {
   test('accepts a batch within the size limit', () => {
     const points = new Array(validate.MAX_POINTS_PER_MESSAGE).fill(5);
