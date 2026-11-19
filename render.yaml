@@ -3,8 +3,8 @@
 # Redis is not used here, so the server runs as a single instance with live
 # state in memory; boards are still saved to PostgreSQL.
 #
-# Deploys are triggered by the CI/CD pipeline (the deploy job calls this
-# service's deploy hook after the tests pass), not by every push.
+# A push to main is deployed only after its GitHub checks (the CI/CD
+# pipeline's tests and container check) pass.
 databases:
   - name: whiteboard-db
     plan: free
@@ -20,7 +20,7 @@ services:
     dockerfilePath: ./Dockerfile
     dockerContext: .
     healthCheckPath: /health
-    autoDeployTrigger: "off"
+    autoDeployTrigger: checksPass
     envVars:
       - key: DATABASE_URL
         fromDatabase:

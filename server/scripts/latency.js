@@ -57,12 +57,18 @@ async function main() {
   await Promise.race([done, new Promise((r) => setTimeout(r, 3000))]);
   sender.disconnect();
   receiver.disconnect();
-  await cleanupBoard(board);
 
   const s = summarize(latencies);
   const fmt = (n) => `${n.toFixed(2)} ms`;
   console.log(`${FROM === TO ? 'Same server' : `${FROM} -> ${TO}`}: ${s.count}/${COUNT} messages delivered`);
   console.log(`  min ${fmt(s.min)}   p50 ${fmt(s.p50)}   p95 ${fmt(s.p95)}   p99 ${fmt(s.p99)}   max ${fmt(s.max)}`);
+
+  // Only cursor updates were sent, so there is normally nothing to remove.
+  // This is best effort, and only for runs against local servers: a remote
+  // server's database is not the one this script is configured for.
+  if ([FROM, TO].every((url) => /^https?:\/\/(localhost|127\.0\.0\.1)\b/.test(url))) {
+    await cleanupBoard(board).catch((err) => console.warn(`  (cleanup skipped: ${err.code || err.message})`));
+  }
   if (s.count < COUNT) process.exitCode = 1;
 }
 
