@@ -4,6 +4,8 @@
 
 A real-time shared canvas where multiple users draw and collaborate at the same time and see each other's changes instantly.
 
+**Live demo: https://collab-whiteboard-vhsh.onrender.com** (free hosting, so the app sleeps when nobody has used it for a while and the first visit afterwards is slow). Add `?board=anything` to the address for your own board.
+
 **Stack:** React + Konva.js · Socket.io · Node.js/Express · PostgreSQL · Redis · Docker · Jest + React Testing Library
 
 ## Getting started
@@ -62,13 +64,19 @@ npm run bench:batching              # traffic saved by batching and throttling
 
 1. **test**: unit and component tests, integration tests against real PostgreSQL and Redis service containers, and the client build.
 2. **docker** (after `test` passes): builds the production image, starts the container, checks it serves the client and `/health`, and checks it exits cleanly on SIGTERM. On a push to `main` the verified image is then published to GitHub Container Registry as `ghcr.io/colby-okazaki/collab-whiteboard`, tagged with the commit (`sha-1234567`) and `latest`.
-3. **deploy** (pushes to `main` only): calls a hosting provider's deploy hook so it pulls the new image. This does nothing until a `DEPLOY_HOOK_URL` secret is added to the repository, and it says so in its log. Nothing is deployed yet.
+3. **deploy** (pushes to `main` only): calls a hosting provider's deploy hook. This does nothing until a `DEPLOY_HOOK_URL` secret is added to the repository, and it says so in its log. The Render deployment below does not need it: Render builds from the repository and is configured to deploy only after the checks pass.
 
 Pull requests run the tests and the container check but never publish. New packages start private, so the image can be pulled by others only after its visibility is set to public in the package settings on GitHub. Once it is, run a published build with:
 
 ```bash
 docker run -p 8080:4000 ghcr.io/colby-okazaki/collab-whiteboard:latest
 ```
+
+## Deployment
+
+The live demo runs on [Render](https://render.com), described by `render.yaml` (a Render Blueprint): one web service built from the `Dockerfile` (it serves the client and the websocket server together) and one PostgreSQL database, both on free plans. `DATABASE_URL` is wired from the database to the service by reference, so no password is stored in the repository. Redis is not used there, so the server runs as a single instance with live state in memory; boards are still saved to PostgreSQL and survive restarts. That was checked on the live site by restarting the service and reloading a board, and the server logs show the graceful shutdown running on the old instance. The service's `autoDeployTrigger: checksPass` setting makes Render deploy a push only after its GitHub checks pass.
+
+Free-plan limits worth knowing: the web service sleeps when idle, and a free PostgreSQL database expires 30 days after it is created, so a demo that should last needs a paid database or a fresh one.
 
 ## Project layout
 
@@ -159,7 +167,7 @@ Each connection gets a token bucket (`server/src/rateLimit.js`): a burst of 200 
 
 ## Measured results
 
-All numbers come from the scripts in this repo and were measured on a single laptop, with the load generator, both server instances, PostgreSQL and Redis all running on it. That makes them a fair test of the server and the Redis hop, but they exclude internet delay, so real-world latency is these numbers plus the network round trip.
+All numbers come from the scripts in this repo. Unless a row says otherwise they were measured on a single laptop, with the load generator, both server instances, PostgreSQL and Redis all running on it. That makes them a fair test of the server and the Redis hop, but they exclude internet delay, so real-world latency is these numbers plus the network round trip. The sync latency table has one row measured against the live deployment.
 
 ### Sync latency
 
@@ -169,8 +177,9 @@ All numbers come from the scripts in this repo and were measured on a single lap
 |---|---|---|
 | Both users on one server | 0.9 - 1.3 ms | 1.6 - 4.5 ms |
 | Users on two different servers (via Redis) | 2.0 - 2.9 ms | 4.4 - 8.3 ms |
+| Over the internet: this laptop to the live Render deployment (Oregon) and back | 44.7 - 46.4 ms | 113.7 - 121.1 ms |
 
-The ranges cover two separate runs.
+The ranges cover separate runs (two for the local rows, three for the internet row, 500 messages each, all delivered). The internet row sends from one connection and receives on another, both over the internet, so it includes both trips; it was run with `npm run bench -w server -- --from https://collab-whiteboard-vhsh.onrender.com --to https://collab-whiteboard-vhsh.onrender.com` and the app is on a shared free instance, so expect it to vary with your connection and distance from Oregon.
 
 ### Concurrent users
 
