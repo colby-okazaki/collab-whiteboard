@@ -5,7 +5,7 @@ import { throttle } from '../utils/throttle';
 import { createBatcher } from '../utils/batcher';
 import { useWindowSize } from '../hooks/useWindowSize';
 import { exportBoardPng } from '../utils/exportBoard';
-import { ringCursor } from '../utils/ringCursor';
+import { pointerCursor } from '../utils/pointerCursor';
 import { INITIAL_VIEW, boardToScreen, panBy, wheelFactor, zoomAt } from '../utils/view';
 import Cursors from './Cursors';
 import StickyNote, { NOTE_WIDTH, NOTE_HEIGHT } from './StickyNote';
@@ -36,7 +36,7 @@ const Board = forwardRef(function Board({ boardId, tool, color, onNotePlaced, on
   // What part of the board is on screen, and how big it is.
   const [view, setView] = useState(INITIAL_VIEW);
   const panStart = useRef(null);
-  // The color the server gave you, shown around your cursor and everyone else's view of it.
+  // The color the server gave you, used for the outline of your pointer.
   const [myColor, setMyColor] = useState(null);
   // The shape being dragged out, shown only to you until you let go.
   const shapeDraft = useRef(null);
@@ -266,10 +266,10 @@ const Board = forwardRef(function Board({ boardId, tool, color, onNotePlaced, on
   const zoomBy = (factor) => setView((v) => zoomAt(v, v.scale * factor, { x: width / 2, y: height / 2 }));
   const resetView = () => setView(INITIAL_VIEW);
 
-  // Your pointer is a ring in your color while drawing, and a hand for panning.
+  // Your pointer is an arrow outlined in your color while drawing, and a hand for panning.
   useEffect(() => {
     if (tool === 'hand') document.body.style.cursor = 'grab';
-    else document.body.style.cursor = myColor ? ringCursor(myColor) : '';
+    else document.body.style.cursor = myColor ? pointerCursor(myColor) : '';
     return () => {
       document.body.style.cursor = '';
     };

@@ -127,7 +127,7 @@ The **line**, **rect** and **ellipse** tools draw a shape by dragging from one c
 
 ### Guests and colors
 
-There is no login and no names: anyone who opens a link is in, and people are told apart by color. Each person on a board gets their own color, chosen by the server when they join: the first of 12 distinct colors that nobody there is using, and then colors spread around the colour wheel if a board has more people than that. A color is free again when its owner leaves. Because the server decides, two people can't end up with the same color, and a client can't claim someone else's (clients send only where their cursor is, and anything else is ignored). The color shows as a ring around that person's cursor on everyone else's screen, stays the same size however far you zoom, and is the color of the dashed border and "editing" label on a note they are editing. Your own mouse pointer is a ring in your color too, so you can see what others see. Nothing about a person is stored.
+There is no login and no names: anyone who opens a link is in, and people are told apart by color. Each person on a board gets their own color, chosen by the server when they join: the first of 12 distinct colors that nobody there is using, and then colors spread around the colour wheel if a board has more people than that. A color is free again when its owner leaves. Because the server decides, two people can't end up with the same color, and a client can't claim someone else's (clients send only where their cursor is, and anything else is ignored). Each person's cursor is an ordinary arrow pointer with an outline in their color, on everyone else's screen (its tip is exactly where they are pointing), and it stays the same size however far you zoom, and is the color of the dashed border and "editing" label on a note they are editing. Your own mouse pointer is the same outlined arrow, so you can see what others see. Nothing about a person is stored.
 
 ### Zoom and pan
 
@@ -205,7 +205,7 @@ Payload bytes for stroke points are 29-35% lower. Byte counts cover the JSON pay
 
 ### Tests and coverage
 
-`npm test` runs 339 tests (178 server, 161 client), and `npm run coverage` reports coverage:
+`npm test` runs 347 tests (178 server, 169 client), and `npm run coverage` reports coverage:
 
 | | Statements | Lines | Functions | Branches |
 |---|---|---|---|---|
@@ -214,7 +214,7 @@ Payload bytes for stroke points are 29-35% lower. Byte counts cover the JSON pay
 
 The server figure includes the integration tests that run against real PostgreSQL and Redis. The uncovered server code is mostly `index.js`, the startup and signal-handling entry point, which is checked by CI starting the real container instead. Client tests cover drawing, streamed updates from other users, note dragging and editing (including lock denials, rolled-back commits and lock renewal), clearing the board, undo and redo, and switching and sharing boards, touch drawing, drawing shapes, zooming and panning, cursor colors, and exporting an image. Server tests also cover rate limiting. The one client file with no coverage is `socket.js`, which reads Vite's `import.meta` and can't be loaded under Jest. The component tests replace the Konva canvas with plain elements, so they check behavior rather than pixels.
 
-The app is about 1,900 lines of source across 24 files, plus about 3,200 lines of tests.
+The app is about 1,900 lines of source across 25 files, plus about 3,300 lines of tests.
 
 ## Scaling across instances
 

@@ -34,7 +34,7 @@ beforeEach(() => {
 });
 
 describe('your own pointer', () => {
-  test('is a ring in the color the server gave you', () => {
+  test('is an arrow outlined in the color the server gave you', () => {
     render(<Board boardId="room" tool="pen" color="#111111" />);
     expect(document.body.style.cursor).toBe('');
     receive('board:you', { id: 'me', color: '#e11d48' });
@@ -50,7 +50,7 @@ describe('your own pointer', () => {
     expect(decodeURIComponent(document.body.style.cursor)).not.toContain('#e11d48');
   });
 
-  test('is a hand while panning, and the ring comes back with the pen', () => {
+  test('is a hand while panning, and the arrow comes back with the pen', () => {
     const { rerender } = render(<Board boardId="room" tool="pen" color="#111111" />);
     receive('board:you', { id: 'me', color: '#e11d48' });
     rerender(<Board boardId="room" tool="hand" color="#111111" />);
@@ -82,10 +82,10 @@ describe('what you send about yourself', () => {
 });
 
 describe("other people's cursors", () => {
-  test('appear as a ring, with no name', () => {
+  test('appear as an arrow, with no name', () => {
     render(<Board boardId="room" tool="pen" color="#111111" />);
     receive('cursor:move', { id: 'other', x: 5, y: 6, color: '#2563eb' });
-    expect(screen.getAllByTestId('circle')).toHaveLength(3);
+    expect(screen.getAllByTestId('path')).toHaveLength(1);
     expect(screen.queryAllByTestId('text')).toHaveLength(0);
   });
 
@@ -93,6 +93,6 @@ describe("other people's cursors", () => {
     render(<Board boardId="room" tool="pen" color="#111111" />);
     receive('cursor:move', { id: 'other', x: 5, y: 6, color: '#2563eb' });
     receive('cursor:leave', 'other');
-    expect(screen.queryAllByTestId('circle')).toHaveLength(0);
+    expect(screen.queryAllByTestId('path')).toHaveLength(0);
   });
 });

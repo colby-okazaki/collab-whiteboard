@@ -68,11 +68,11 @@ test('applies note updates from the server and removes cursors that leave', () =
   receive('note:upsert', note({ x: 99, version: 2 }));
   expect(screen.getAllByTestId('group').filter((g) => g.dataset.x === '99')).toHaveLength(1);
 
-  const ringsBefore = screen.queryAllByTestId('circle').length;
+  const ringsBefore = screen.queryAllByTestId('path').length;
   receive('cursor:move', { id: 'other', x: 5, y: 6, color: '#2563eb' });
-  expect(screen.getAllByTestId('circle').length).toBeGreaterThan(ringsBefore);
+  expect(screen.getAllByTestId('path').length).toBeGreaterThan(ringsBefore);
   receive('cursor:leave', 'other');
-  expect(screen.queryAllByTestId('circle')).toHaveLength(ringsBefore);
+  expect(screen.queryAllByTestId('path')).toHaveLength(ringsBefore);
 });
 
 test('drawing sends the stroke start, batched points, and the end', () => {

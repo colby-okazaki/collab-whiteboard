@@ -1,5 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import Cursors from '../components/Cursors';
+import { ARROW_PATH, OUTLINE_WIDTH, TIP } from '../utils/pointerCursor';
 
 // Shows each Konva element's props as data, so the test can read them.
 jest.mock('react-konva', () => {
@@ -8,7 +9,7 @@ jest.mock('react-konva', () => {
       {children}
     </div>
   );
-  return { Group: el('group'), Circle: el('circle'), Text: el('text') };
+  return { Group: el('group'), Path: el('path'), Text: el('text') };
 });
 
 const props = (element) => JSON.parse(element.dataset.props);
@@ -27,28 +28,30 @@ test('shows one cursor for each person, at their position', () => {
   ]);
 });
 
-test('draws a ring in the persons color, on a white halo so it shows on anything', () => {
+test('draws an arrow with an outline in the persons color and a white fill', () => {
   render(<Cursors cursors={{ a: cursors.a }} />);
-  const circles = screen.getAllByTestId('circle').map(props);
-  expect(circles).toContainEqual(expect.objectContaining({ radius: 10, stroke: '#ffffff' }));
-  expect(circles).toContainEqual(expect.objectContaining({ radius: 10, stroke: '#2563eb' }));
-  expect(circles).toContainEqual(expect.objectContaining({ fill: '#2563eb' }));
+  expect(props(screen.getByTestId('path'))).toMatchObject({
+    data: ARROW_PATH,
+    stroke: '#2563eb',
+    fill: '#ffffff',
+    strokeWidth: OUTLINE_WIDTH,
+  });
 });
 
-test('shows no names or labels, only the ring', () => {
+test('puts the arrow tip exactly on the persons position', () => {
+  render(<Cursors cursors={{ a: cursors.a }} />);
+  expect(props(screen.getByTestId('path'))).toMatchObject({ x: -TIP, y: -TIP });
+});
+
+test('shows no names or labels, only the arrow', () => {
   render(<Cursors cursors={cursors} />);
   expect(screen.queryByTestId('text')).toBeNull();
-  expect(screen.getAllByTestId('circle')).toHaveLength(6);
+  expect(screen.getAllByTestId('path')).toHaveLength(2);
 });
 
-test('different people get different colors on screen', () => {
+test('different people get different outline colors', () => {
   render(<Cursors cursors={cursors} />);
-  const rings = screen
-    .getAllByTestId('circle')
-    .map(props)
-    .filter((c) => c.stroke && c.stroke !== '#ffffff')
-    .map((c) => c.stroke);
-  expect(rings).toEqual(['#2563eb', '#16a34a']);
+  expect(screen.getAllByTestId('path').map((p) => props(p).stroke)).toEqual(['#2563eb', '#16a34a']);
 });
 
 test('stays the same size on screen however far the board is zoomed', () => {

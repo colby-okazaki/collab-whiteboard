@@ -60,6 +60,7 @@ export function createKonvaMock() {
     Line: el('line'),
     Group: el('group'),
     Rect: el('rect'),
+    Path: el('path'),
     Label: el('label'),
     Tag: el('tag'),
     Ellipse: el('ellipse'),
