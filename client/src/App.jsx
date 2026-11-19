@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Toolbar from './components/Toolbar';
 import Board from './components/Board';
+import ConfirmDialog from './components/ConfirmDialog';
 import { socket } from './socket';
 import { boardIdFromSearch, boardUrl, newBoardId } from './utils/boardId';
 
@@ -14,6 +15,7 @@ export default function App() {
   const [boardId, setBoardId] = useState(() => boardIdFromSearch(window.location.search));
   const [copied, setCopied] = useState(false);
   const [zoom, setZoom] = useState(1);
+  const [confirmingClear, setConfirmingClear] = useState(false);
 
   // The back and forward buttons move between boards too.
   useEffect(() => {
@@ -41,10 +43,11 @@ export default function App() {
   };
 
   // Clearing wipes the board for every connected user, so ask first.
-  const handleClear = () => {
-    if (window.confirm('Clear the whole board for everyone? This cannot be undone.')) {
-      socket.emit('board:clear');
-    }
+  const handleClear = () => setConfirmingClear(true);
+  const cancelClear = useCallback(() => setConfirmingClear(false), []);
+  const confirmClear = () => {
+    setConfirmingClear(false);
+    socket.emit('board:clear');
   };
 
   return (
@@ -79,6 +82,15 @@ export default function App() {
         onHistoryChange={setHistory}
         onZoomChange={setZoom}
       />
+      {confirmingClear && (
+        <ConfirmDialog
+          title="Clear the board?"
+          message="This clears the whole board for everyone, and cannot be undone."
+          confirmLabel="Clear board"
+          onConfirm={confirmClear}
+          onCancel={cancelClear}
+        />
+      )}
     </>
   );
 }

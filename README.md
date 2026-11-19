@@ -143,7 +143,7 @@ Cmd/Ctrl+Z undoes your last stroke, Shift+Cmd/Ctrl+Z (or Ctrl+Y) redoes it, and 
 
 ### Clearing a board
 
-The **clear board** button asks for confirmation, then wipes the board for every connected user: the live state (memory or Redis) is emptied, the board's rows are deleted from PostgreSQL in a single statement, and every client is told to reset, including dropping any half-drawn stroke or open note editor. Database writes for a board run in order, so a slow save from just before a clear can't land afterwards and bring deleted content back after a restart. Late messages about cleared content (extra stroke points, note commits) find nothing to attach to and are dropped.
+The **clear board** button asks for confirmation in a dialog inside the page (not the browser's own `confirm()` popup, which embedded browsers and some privacy settings block, leaving the button apparently doing nothing). Cancel is focused first, Escape or clicking outside backs out, and confirming wipes the board for every connected user: the live state (memory or Redis) is emptied, the board's rows are deleted from PostgreSQL in a single statement, and every client is told to reset, including dropping any half-drawn stroke or open note editor. Database writes for a board run in order, so a slow save from just before a clear can't land afterwards and bring deleted content back after a restart. Late messages about cleared content (extra stroke points, note commits) find nothing to attach to and are dropped.
 
 ## Input validation
 

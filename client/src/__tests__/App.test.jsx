@@ -39,21 +39,74 @@ test('switches back to the pen after a note is placed', () => {
 
 describe('clear board', () => {
   beforeEach(() => socket.emit.mockClear());
-  afterEach(() => jest.restoreAllMocks());
 
-  test('asks for confirmation and clears the board when confirmed', () => {
-    const confirm = jest.spyOn(window, 'confirm').mockReturnValue(true);
-    render(<App />);
+  const openDialog = () => {
     fireEvent.click(screen.getByRole('button', { name: 'clear board' }));
-    expect(confirm).toHaveBeenCalledWith(expect.stringContaining('everyone'));
-    expect(socket.emit).toHaveBeenCalledWith('board:clear');
+    return screen.getByRole('alertdialog');
+  };
+
+  test('asks first, inside the page, and clears nothing yet', () => {
+    render(<App />);
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    const dialog = openDialog();
+    expect(dialog).toHaveTextContent('everyone');
+    expect(socket.emit).not.toHaveBeenCalled();
   });
 
-  test('does nothing when the user cancels', () => {
-    jest.spyOn(window, 'confirm').mockReturnValue(false);
+  test('does not depend on the browsers own confirm popup, which can be blocked', () => {
+    const confirm = jest.spyOn(window, 'confirm').mockReturnValue(false);
     render(<App />);
-    fireEvent.click(screen.getByRole('button', { name: 'clear board' }));
+    openDialog();
+    fireEvent.click(screen.getByRole('button', { name: 'Clear board' }));
+    expect(socket.emit).toHaveBeenCalledWith('board:clear');
+    expect(confirm).not.toHaveBeenCalled();
+    confirm.mockRestore();
+  });
+
+  test('confirming clears the board and closes the dialog', () => {
+    render(<App />);
+    openDialog();
+    fireEvent.click(screen.getByRole('button', { name: 'Clear board' }));
+    expect(socket.emit).toHaveBeenCalledTimes(1);
+    expect(socket.emit).toHaveBeenCalledWith('board:clear');
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+  });
+
+  test('cancelling does nothing and closes the dialog', () => {
+    render(<App />);
+    openDialog();
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
     expect(socket.emit).not.toHaveBeenCalled();
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+  });
+
+  test('Escape backs out without clearing', () => {
+    render(<App />);
+    openDialog();
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(socket.emit).not.toHaveBeenCalled();
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+  });
+
+  test('clicking outside the dialog backs out without clearing', () => {
+    const { container } = render(<App />);
+    openDialog();
+    fireEvent.mouseDown(container.ownerDocument.querySelector('.dialog-backdrop'));
+    expect(socket.emit).not.toHaveBeenCalled();
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+  });
+
+  test('clicking inside the dialog does not close it', () => {
+    render(<App />);
+    openDialog();
+    fireEvent.mouseDown(screen.getByRole('alertdialog'));
+    expect(screen.getByRole('alertdialog')).toBeInTheDocument();
+  });
+
+  test('starts on the safe choice, so a stray Enter does not clear the board', () => {
+    render(<App />);
+    openDialog();
+    expect(screen.getByRole('button', { name: 'Cancel' })).toHaveFocus();
   });
 });
 
