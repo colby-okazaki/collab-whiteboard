@@ -1,0 +1,28 @@
+# Render Blueprint: the whole app as one web service built from the
+# Dockerfile (it serves the client too), plus its PostgreSQL database.
+# Redis is not used here, so the server runs as a single instance with live
+# state in memory; boards are still saved to PostgreSQL.
+#
+# Deploys are triggered by the CI/CD pipeline (the deploy job calls this
+# service's deploy hook after the tests pass), not by every push.
+databases:
+  - name: whiteboard-db
+    plan: free
+    region: oregon
+    postgresMajorVersion: "16"
+
+services:
+  - type: web
+    name: collab-whiteboard
+    runtime: docker
+    plan: free
+    region: oregon
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    autoDeployTrigger: "off"
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: whiteboard-db
+          property: connectionString
