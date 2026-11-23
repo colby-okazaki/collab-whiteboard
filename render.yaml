@@ -3,8 +3,8 @@
 # Redis is not used here, so the server runs as a single instance with live
 # state in memory; boards are still saved to PostgreSQL.
 #
-# A push to main is deployed only after its GitHub checks (the CI/CD
-# pipeline's tests and container check) pass.
+# Meant to deploy a push to main once its GitHub checks pass. In practice
+# that has not fired; see the Deployment section of the README.
 databases:
   - name: whiteboard-db
     plan: free
