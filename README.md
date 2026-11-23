@@ -6,7 +6,7 @@ A real-time shared canvas where multiple users draw and collaborate at the same 
 
 **Live demo: https://collab-whiteboard-vhsh.onrender.com** (free hosting, so the app sleeps when nobody has used it for a while and the first visit afterwards is slow). Add `?board=anything` to the address for your own board.
 
-**Stack:** React + Konva.js · Socket.io · Node.js/Express · PostgreSQL · Redis · Docker · Jest + React Testing Library
+**Stack:** React + Konva.js · Socket.io · Node.js/Express · PostgreSQL · Redis · Docker · GitHub Actions (CI/CD) · Render · Jest + React Testing Library
 
 ## Getting started
 
@@ -81,10 +81,16 @@ Free-plan limits worth knowing: the web service sleeps when idle, and a free Pos
 ## Project layout
 
 ```
-server/   Express + Socket.io server (also serves the built client in production)
-  src/store/   live board state: in-memory or Redis, sharing one set of conflict rules
-  src/db/      PostgreSQL persistence
-client/   Vite + React + react-konva frontend
+client/            Vite + React + react-konva frontend
+server/            Express + Socket.io server (also serves the built client in production)
+  src/store/         live board state: in-memory or Redis, sharing one set of conflict rules
+  src/db/            PostgreSQL persistence
+  scripts/           benchmarks and stress tests
+scripts/           client batching benchmark
+Dockerfile         production image (builds the client, then ships the server)
+docker-compose.yml PostgreSQL and Redis for local development, and the whole app on request
+render.yaml        Render deployment: one web service and its database
+.github/workflows/ CI/CD pipeline
 ```
 
 ## Roadmap (v1)
@@ -103,14 +109,14 @@ client/   Vite + React + react-konva frontend
 - [x] Undo and redo of your own strokes
 - [x] Multiple boards: shareable links (`?board=name`) and a new board button
 - [x] Export the board as a PNG
-- [x] Touch drawing on phones and tablets
+- [x] Touch drawing on phones and tablets (tried with simulated touch events, not a real device)
 - [x] Stretch: Redis for multi-instance scaling
 
 ## Conflict resolution
 
 Sticky notes use two layers of protection against concurrent edits:
 
-1. **Locks for in-progress interactions.** Dragging or editing a note first acquires a lock on the server. Other users see the note outlined with the editor's name and cannot grab it until the lock is released (on drop, save, cancel, or disconnect). Locks expire after 60 seconds unless renewed, which the client does while the editor is open, so a crashed server or client can never leave a note stuck.
+1. **Locks for in-progress interactions.** Dragging or editing a note first acquires a lock on the server. Other users see the note with a dashed border in the editor's color and an "editing" label, and cannot grab it until the lock is released (on drop, save, cancel, or disconnect). Locks expire after 60 seconds unless renewed, which the client does while the editor is open, so a crashed server or client can never leave a note stuck.
 2. **Optimistic concurrency for commits.** Each commit includes the version it was based on. If the note changed since then (for example, the client had not yet received another user's commit), the server rejects the commit and the client rolls back to the authoritative state instead of silently overwriting someone else's work.
 
 Drag positions are streamed to other users while dragging but are only stored once the move is committed.
@@ -135,7 +141,7 @@ The **line**, **rect** and **ellipse** tools draw a shape by dragging from one c
 
 ### Guests and colors
 
-There is no login and no names: anyone who opens a link is in, and people are told apart by color. Each person on a board gets their own color, chosen by the server when they join: the first of 12 distinct colors that nobody there is using, and then colors spread around the colour wheel if a board has more people than that. A color is free again when its owner leaves. Because the server decides, two people can't end up with the same color, and a client can't claim someone else's (clients send only where their cursor is, and anything else is ignored). Each person's cursor is an ordinary arrow pointer with an outline in their color, on everyone else's screen (its tip is exactly where they are pointing), and it stays the same size however far you zoom, and is the color of the dashed border and "editing" label on a note they are editing. Your own mouse pointer is the same outlined arrow, so you can see what others see. Nothing about a person is stored.
+There is no login and no names: anyone who opens a link is in, and people are told apart by color. Each person on a board gets their own color, chosen by the server when they join: the first of 12 distinct colors that nobody there is using, and then colors spread around the colour wheel if a board has more people than that. A color is free again when its owner leaves. Because the server decides, two people can't end up with the same color, and a client can't claim someone else's (clients send only where their cursor is, and anything else is ignored). Each person's cursor is an ordinary arrow pointer with an outline in their color, on everyone else's screen. Its tip is exactly where they are pointing, and it stays the same size however far you zoom. The same color is used for the dashed border and "editing" label on a note that person is editing. Your own mouse pointer is the same outlined arrow, so you can see what others see. Nothing about a person is stored.
 
 ### Zoom and pan
 
@@ -178,6 +184,8 @@ All numbers come from the scripts in this repo. Unless a row says otherwise they
 | Both users on one server | 0.9 - 1.3 ms | 1.6 - 4.5 ms |
 | Users on two different servers (via Redis) | 2.0 - 2.9 ms | 4.4 - 8.3 ms |
 | Over the internet: this laptop to the live Render deployment (Oregon) and back | 44.7 - 46.4 ms | 113.7 - 121.1 ms |
+
+Tail latency on a laptop is noisy. A later re-run of the one-server row with the in-memory store gave a median of 0.5 - 0.8 ms, but one of three runs had a p99 of 14 ms, so treat the p99 column as a typical range, not a ceiling.
 
 The ranges cover separate runs (two for the local rows, three for the internet row, 500 messages each, all delivered). The internet row sends from one connection and receives on another, both over the internet, so it includes both trips; it was run with `npm run bench -w server -- --from https://collab-whiteboard-vhsh.onrender.com --to https://collab-whiteboard-vhsh.onrender.com` and the app is on a shared free instance, so expect it to vary with your connection and distance from Oregon.
 
@@ -236,4 +244,12 @@ A single server keeps live state in memory. With `REDIS_URL` set, every instance
 
 Both store implementations run the same contract test suite, and an integration test starts multiple instances in one process and checks that strokes, locks, stale commits, and disconnects behave correctly when users are on different instances.
 
-**Out of scope:** layers/vector shapes, undo/redo, auth/permissions, mobile, Figma-level features.
+## Known limitations
+
+- **No accounts, by design.** Anyone with a board's link can edit it, and can clear it.
+- **No limits per board.** Rate limiting slows a single connection down, but nothing caps how many boards, strokes or notes can be created.
+- **Touch is lightly tested.** It has only been tried with simulated touch events, and pinch-to-zoom is not handled.
+- **The live demo is a single instance on free plans.** Redis is supported and tested with several local instances, but it is not used on Render; the web service sleeps when idle; and the free database expires after 30 days.
+- **Canvas rendering is not covered by tests.** The tests replace the Konva canvas with plain elements, so what is drawn on screen has been checked by hand in a browser.
+
+**Out of scope:** layers, accounts and permissions, a native mobile app, and Figma-level features.
